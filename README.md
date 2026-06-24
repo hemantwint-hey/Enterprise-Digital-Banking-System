@@ -2,7 +2,7 @@
 
 Enterprise Digital Banking System is a backend banking application built using Spring Boot and Java. The system simulates core banking operations such as account management, customer management, fund transfers, transaction processing, and secure authentication. It follows enterprise-level design principles and RESTful architecture to provide a scalable and maintainable banking solution.
 
-<img src="banking.svg" width="900"/>
+<img src="banking_system_uml_architecture.svg" width="900"/>
 
 ## Features
 
@@ -15,4 +15,3 @@ Enterprise Digital Banking System is a backend banking application built using S
 - RESTful APIs
 - Database Integration with MySQL
 
-<img src="banking.svg" width="700">
