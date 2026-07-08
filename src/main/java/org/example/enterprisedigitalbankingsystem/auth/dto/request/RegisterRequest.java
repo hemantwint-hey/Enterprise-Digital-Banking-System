@@ -22,4 +22,6 @@ public class RegisterRequest {
 
     @NotBlank(message = "Confirm password didnot match")
     private String confirm_password;
+
+
 }
