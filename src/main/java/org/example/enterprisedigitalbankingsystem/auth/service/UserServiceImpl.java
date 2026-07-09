@@ -46,7 +46,7 @@ public class UserServiceImpl implements UserService {
                 .message("User Registered Successfully")
                 .build();
     }
-
+//login code
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
