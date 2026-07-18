@@ -3,6 +3,7 @@ package org.example.enterprisedigitalbankingsystem.auth.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.nio.file.FileStore;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -57,4 +58,6 @@ public class User {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+
 }
