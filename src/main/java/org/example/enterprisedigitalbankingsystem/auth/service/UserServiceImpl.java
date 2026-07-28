@@ -9,6 +9,8 @@ import org.example.enterprisedigitalbankingsystem.auth.entity.Role;
 import org.example.enterprisedigitalbankingsystem.auth.entity.User;
 import org.example.enterprisedigitalbankingsystem.auth.entity.UserStatus;
 import org.example.enterprisedigitalbankingsystem.auth.repository.UserRepository;
+import org.example.enterprisedigitalbankingsystem.exception.InvalidCredentialsException;
+import org.example.enterprisedigitalbankingsystem.exception.UserAlreadyExistsException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,10 +26,10 @@ public class UserServiceImpl implements UserService {
     @Override
     public RegisterResponse register(RegisterRequest registerRequest) {
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
-            throw new IllegalArgumentException("Email already exists");
+            throw new UserAlreadyExistsException("Email already exists");
         }
         if(!registerRequest.getPassword().equals(registerRequest.getConfirm_password())){
-            throw new RuntimeException("Passowrd do not match");
+            throw new InvalidCredentialsException("Passowrd do not match");
         }
         User user = User.builder()
                 .email(registerRequest.getEmail())
