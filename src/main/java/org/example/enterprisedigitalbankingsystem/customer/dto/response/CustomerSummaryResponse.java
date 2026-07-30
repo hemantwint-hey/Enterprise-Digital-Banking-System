@@ -1,5 +1,20 @@
 package org.example.enterprisedigitalbankingsystem.customer.dto.response;
 
-public class CustomerSummaryResponse {
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.example.enterprisedigitalbankingsystem.customer.entity.KYCStatus;
 
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class CustomerSummaryResponse {
+    private Long customerId;
+    private String firstName;
+    private String lastName;
+    private String phoneNumber;
+    private String city;
+    private KYCStatus kycStatus;
 }
