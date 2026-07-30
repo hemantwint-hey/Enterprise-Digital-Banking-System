@@ -29,7 +29,7 @@ public class UserServiceImpl implements UserService {
             throw new UserAlreadyExistsException("Email already exists");
         }
         if(!registerRequest.getPassword().equals(registerRequest.getConfirm_password())){
-            throw new InvalidCredentialsException("Passowrd do not match");
+            throw new InvalidCredentialsException("Password do not match");
         }
         User user = User.builder()
                 .email(registerRequest.getEmail())
