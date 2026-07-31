@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-@Service
+
 public interface CustomerService {
     CustomerResponse createCustomer(CreateCustomerRequest request);
     CustomerResponse getCustomerById(Long customerId);
@@ -17,5 +17,5 @@ public interface CustomerService {
     CustomerResponse getCustomerByUserId(Long userId);
     List<CustomerSummaryResponse> getAllCustomers();
     CustomerResponse completeKYC(Long customerId, CompleteKYCRequest request);
-    CustomerResponse deleteCustomer(Long customerId);
+    void deleteCustomer(Long customerId);
 }
