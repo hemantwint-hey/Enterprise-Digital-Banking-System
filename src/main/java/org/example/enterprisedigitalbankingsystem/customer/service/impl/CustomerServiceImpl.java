@@ -12,6 +12,7 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.mapper.CustomerMapper;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.customer.service.CustomerService;
+import org.hibernate.internal.util.Optional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,7 +26,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CustomerResponse createCustomer(CreateCustomerRequest request) {
-        Customer user  = customerRepository.findByUser(request.get)
+        Optional<Customer> user  = customerRepository.findByUser(request.getEmail());
         Customer customer = customerMapper.toEntity(request);
         customerRepository.save(customer);
 

@@ -57,4 +57,6 @@ public class CreateCustomerRequest {
             message = "Postal Code must be valid 6 - digit PIN CODE"
     )
     private String postalCode;
+
+    private String email;
 }
