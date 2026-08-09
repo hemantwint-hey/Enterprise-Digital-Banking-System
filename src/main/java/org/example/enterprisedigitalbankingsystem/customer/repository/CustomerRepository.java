@@ -1,17 +1,18 @@
 package org.example.enterprisedigitalbankingsystem.customer.repository;
 
 import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
-import org.hibernate.internal.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+import java.util.UUID;
+
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
-    Optional<Customer> findByUser(String user);
-    Optional<Customer> findByUserId(Long userId);
-    Optional<Customer> findByPanNumber(String panNo);
-    Optional<Customer> findByAadharNumber(String aadharNumber);
+    Optional<Customer> findByUserUserId(UUID userId);
+    Optional<Customer> findByPanNumber(String panNumber);
+    Optional<Customer> findByAadhaarNumber(String aadhaarNumber);
     Optional<Customer> findByPhoneNumber(String phoneNumber);
 
-    boolean existByPhoneNumber(String phoneNumber);
-    boolean existByPanNumber(String panNumber);
-    boolean existByAadharNumber(String aadharNumber);
+    boolean existsByPhoneNumber(String phoneNumber);
+    boolean existsByPanNumber(String panNumber);
+    boolean existsByAadhaarNumber(String aadhaarNumber);
 }

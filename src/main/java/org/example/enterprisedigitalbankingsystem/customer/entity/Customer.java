@@ -62,4 +62,13 @@ public class Customer {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        createdAt = LocalDateTime.now();
+
+        if (kycStatus == null) {
+            kycStatus = KYCStatus.PENDING;
+        }
+    }
 }

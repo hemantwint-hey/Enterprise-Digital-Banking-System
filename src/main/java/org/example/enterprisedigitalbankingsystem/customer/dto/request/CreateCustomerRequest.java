@@ -1,6 +1,7 @@
 package org.example.enterprisedigitalbankingsystem.customer.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -53,10 +54,12 @@ public class CreateCustomerRequest {
 
     @NotBlank(message = "PostalCode is required")
     @Pattern(
-            regexp = "\\d{9}$",
+            regexp = "^\\d{6}$",
             message = "Postal Code must be valid 6 - digit PIN CODE"
     )
     private String postalCode;
 
+    @Email(message = "Invalid email format")
+    @NotBlank(message = "Email is required")
     private String email;
 }
