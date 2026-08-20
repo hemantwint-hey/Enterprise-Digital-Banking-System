@@ -2,6 +2,7 @@ package org.example.enterprisedigitalbankingsystem.account.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -21,6 +22,10 @@ public class Account {
 
     @Column(name = "account_number", unique = true, nullable = false)
     private String accountNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
 
     @Column(name = "account_holder_name", nullable = false)
     private String accountHolderName;
