@@ -15,10 +15,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Builder
 public class AccountResponse{
-    private long accountId;
+    private Long accountId;
     private String accountNumber;
     private Long customerId;
-    private Long customerName;
+    private String customerName;
     private String accountHolderName;
     private String branch;
     private BigDecimal balance;
