@@ -9,7 +9,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -26,7 +25,4 @@ public class DepositRequest {
 
     @Size(max = 255 , message = "Remarks cannot exceeds 255 characters")
     private String remarks;
-
-    private LocalDateTime createdAt;
-
 }

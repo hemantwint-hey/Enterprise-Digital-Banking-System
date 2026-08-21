@@ -14,20 +14,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TransactionResponse {
+public class TransactionSummaryResponse {
     private Long transactionId;
     private String transactionReference;
-
-    private Long sourceAccountId;
-    private String sourceAccountNumber;
-
-    private Long destinationAccountId;
-    private String destinationAccountNumber;
-
     private BigDecimal amount;
     private TransactionType transactionType;
     private TransactionStatus transactionStatus;
-    private BigDecimal balanceAfterTransaction;
-    private String remarks;
     private LocalDateTime createdAt;
 }

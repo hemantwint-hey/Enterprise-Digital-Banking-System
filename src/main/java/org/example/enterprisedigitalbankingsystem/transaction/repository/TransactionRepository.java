@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository  extends JpaRepository<Transaction,Long> {
-    Optional<Transaction> fiindByTransactionReference(String transactionReference);
+    Optional<Transaction> findByTransactionReference(String transactionReference);
     boolean existsByTransactionReference(String transactionReference);
     List<Transaction> findBySourceAccountIdOrDestinationAccountIdOrderByCreatedAtDesc(
             Long sourceAccountId,
