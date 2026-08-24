@@ -3,7 +3,6 @@ package org.example.enterprisedigitalbankingsystem.auth.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.nio.file.FileStore;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -15,7 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class User {
-// this is the User class
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID userId;

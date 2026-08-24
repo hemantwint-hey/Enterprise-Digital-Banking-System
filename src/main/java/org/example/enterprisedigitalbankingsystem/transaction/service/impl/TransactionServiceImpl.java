@@ -2,6 +2,7 @@ package org.example.enterprisedigitalbankingsystem.transaction.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
+import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
@@ -41,6 +42,8 @@ public class TransactionServiceImpl implements TransactionService {
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Account not found with id: " + request.getAccountId()));
 
+        validateAccountActive(account);
+
         BigDecimal newBalance = account.getBalance().add(request.getAmount());
         account.setBalance(newBalance);
         accountRepository.save(account);
@@ -65,6 +68,9 @@ public class TransactionServiceImpl implements TransactionService {
                         new ResourceNotFoundException(
                            "Account not found with id:" + request.getAccountId()
                         ));
+
+        validateAccountActive(account);
+
         BigDecimal currentBalance = account.getBalance();
         BigDecimal amount = request.getAmount();
 
@@ -87,6 +93,15 @@ public class TransactionServiceImpl implements TransactionService {
 
         transaction = transactionRepository.save(transaction);
         return transactionMapper.toResponse(transaction);
+    }
+
+    private void validateAccountActive(Account account) {
+        if (account.getAccountStatus() != AccountStatus.ACTIVE) {
+            throw new BadRequestException(
+                    "Account " + account.getAccountNumber() + " is " + account.getAccountStatus()
+                    + " and cannot be used for transactions"
+            );
+        }
     }
 
     private String generateUniqueTransactionReference() {
@@ -116,6 +131,9 @@ public class TransactionServiceImpl implements TransactionService {
         if(sourceAccount.getId().equals(destinationAccount.getId())){
             throw new BadRequestException("Source and Destination cannot be same ");
         }
+
+        validateAccountActive(sourceAccount);
+        validateAccountActive(destinationAccount);
 
         BigDecimal amount = request.getAmount();
         if(sourceAccount.getBalance().compareTo(amount)<0){

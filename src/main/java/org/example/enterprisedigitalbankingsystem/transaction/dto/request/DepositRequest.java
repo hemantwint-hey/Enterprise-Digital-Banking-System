@@ -19,7 +19,7 @@ public class DepositRequest {
     @NotNull( message = "Account id is required")
     private Long accountId;
 
-    @NotNull(message = "Account is required")
+    @NotNull(message = "Amount is required")
     @DecimalMin(value = "1.00", message = "Amount must be at least 1.00")
     private BigDecimal amount;
 

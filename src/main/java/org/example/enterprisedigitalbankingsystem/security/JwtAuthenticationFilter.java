@@ -1,5 +1,6 @@
 package org.example.enterprisedigitalbankingsystem.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -7,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -43,38 +45,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Step 3: Remove "Bearer " prefix
         String token = authHeader.substring(7);
 
-        // Step 4: Extract email from JWT
-        String email = jwtUtil.extractEmail(token);
+        try {
+            // Step 4: Extract email from JWT
+            String email = jwtUtil.extractEmail(token);
 
-        // Step 5: Authenticate only if user is not already authenticated
-        if (email != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+            // Step 5: Authenticate only if user is not already authenticated
+            if (email != null &&
+                    SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            // Step 6: Load user from database
-            UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(email);
+                // Step 6: Load user from database
+                UserDetails userDetails =
+                        userDetailsService.loadUserByUsername(email);
 
-            // Step 7: Validate token
-            if (jwtUtil.validateToken(token, userDetails)) {
+                // Step 7: Validate token
+                if (jwtUtil.validateToken(token, userDetails)) {
 
-                // Step 8: Create Authentication object
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
+                    // Step 8: Create Authentication object
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
 
-                // Step 9: Attach request details
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request)
-                );
+                    // Step 9: Attach request details
+                    authentication.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request)
+                    );
 
-                // Step 10: Store authentication in SecurityContext
-                SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+                    // Step 10: Store authentication in SecurityContext
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+                }
             }
+        } catch (JwtException | UsernameNotFoundException ex) {
+            // Invalid, malformed, or expired token, or unknown user: leave the request
+            // unauthenticated so JwtAuthenticationEntryPoint returns a clean 401.
+            SecurityContextHolder.clearContext();
         }
 
         // Step 11: Continue remaining filters

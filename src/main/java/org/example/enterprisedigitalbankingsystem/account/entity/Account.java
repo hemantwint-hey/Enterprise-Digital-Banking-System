@@ -65,7 +65,6 @@ public class Account {
             accountStatus = AccountStatus.ACTIVE;
         }
     }
-    // to update any c
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
