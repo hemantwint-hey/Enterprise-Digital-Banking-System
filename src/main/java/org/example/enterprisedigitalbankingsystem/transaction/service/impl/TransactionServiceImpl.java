@@ -6,6 +6,7 @@ import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
+import org.example.enterprisedigitalbankingsystem.ledger.service.LedgerService;
 import org.example.enterprisedigitalbankingsystem.transaction.dto.request.DepositRequest;
 import org.example.enterprisedigitalbankingsystem.transaction.dto.request.TransferRequest;
 import org.example.enterprisedigitalbankingsystem.transaction.dto.request.WithdrawRequest;
@@ -34,6 +35,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final TransactionMapper transactionMapper;
+    private final LedgerService ledgerService;
 
     @Override
     public TransactionResponse deposit(DepositRequest request) {
@@ -58,6 +60,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setTransactionReference(generateUniqueTransactionReference());
 
         transaction = transactionRepository.save(transaction);
+        ledgerService.recordTransactionEntries(transaction);
         return transactionMapper.toResponse(transaction);
     }
 
@@ -92,6 +95,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setTransactionReference(generateUniqueTransactionReference());
 
         transaction = transactionRepository.save(transaction);
+        ledgerService.recordTransactionEntries(transaction);
         return transactionMapper.toResponse(transaction);
     }
 
@@ -161,6 +165,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setTransactionReference(generateUniqueTransactionReference());
 
         transaction = transactionRepository.save(transaction);
+        ledgerService.recordTransactionEntries(transaction);
         return transactionMapper.toResponse(transaction);
     }
 
