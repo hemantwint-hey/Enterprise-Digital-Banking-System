@@ -1,0 +1,427 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Enterprise Digital Banking System — Project Overview</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Calibri, Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11.5px;
+    line-height: 1.5;
+    max-width: 100%;
+  }
+  h1 {
+    font-size: 22px;
+    border-bottom: 3px solid #2b5797;
+    padding-bottom: 8px;
+    color: #17365d;
+    margin-top: 0;
+  }
+  h2 {
+    font-size: 16px;
+    color: #2b5797;
+    border-bottom: 1px solid #cfd8e3;
+    padding-bottom: 4px;
+    margin-top: 28px;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 13px;
+    color: #17365d;
+    margin-top: 18px;
+    page-break-after: avoid;
+  }
+  .subtitle {
+    color: #555;
+    font-size: 12px;
+    margin-top: -6px;
+    margin-bottom: 18px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0 16px 0;
+    font-size: 10.5px;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid #c7d0dc;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #eef2f8;
+    color: #17365d;
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code {
+    background: #eef1f5;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 10.5px;
+    color: #a5296b;
+  }
+  pre {
+    background: #f4f6f9;
+    border: 1px solid #dbe2ea;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 10px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    page-break-inside: avoid;
+  }
+  .mermaid {
+    background: #ffffff;
+    border: 1px solid #dbe2ea;
+    border-radius: 4px;
+    padding: 14px;
+    margin: 12px 0 20px 0;
+    text-align: center;
+    page-break-inside: avoid;
+  }
+  .note {
+    background: #fff7e6;
+    border-left: 4px solid #e0a721;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 10.5px;
+  }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin-bottom: 3px; }
+  .section-divider { border: none; border-top: 1px solid #dbe2ea; margin: 22px 0; }
+  strong { color: #17365d; }
+</style>
+</head>
+<body>
+
+<h1>Enterprise Digital Banking System — Project Overview</h1>
+<p class="subtitle">Snapshot as of <strong>2026-08-28</strong> &nbsp;|&nbsp; covers everything built so far against the 90-Day Roadmap (Phase 1 complete, Phase 2 through the Ledger module complete — roughly <strong>Day 1–35</strong>)</p>
+
+<h2>1. Progress Snapshot</h2>
+<table>
+<tr><th>Module</th><th>Roadmap Days</th><th>Status</th><th>Notes</th></tr>
+<tr><td>Auth (User, Role, JWT, Security)</td><td>1–9</td><td>✅ Done</td><td>Register/Login working, stateless JWT filter chain</td></tr>
+<tr><td>Exception Handling</td><td>10</td><td>✅ Done</td><td>Global handler + 6 custom exceptions</td></tr>
+<tr><td>Customer</td><td>11–15</td><td>✅ Done</td><td>Full CRUD + KYC completion endpoint</td></tr>
+<tr><td>Account</td><td>16–20</td><td>✅ Done</td><td>Full CRUD + freeze/close, optimistic locking (<code>@Version</code>)</td></tr>
+<tr><td>Transaction</td><td>21–30</td><td>✅ Done</td><td>Deposit / Withdraw / Transfer, balance validation, history</td></tr>
+<tr><td>Ledger (double-entry)</td><td>31–36</td><td>✅ Done (ahead of schedule)</td><td>Debit/credit entries auto-recorded per transaction</td></tr>
+<tr><td>Audit</td><td>37–40</td><td>⬜ Not started</td><td>Next up</td></tr>
+<tr><td>Beneficiary</td><td>41–43</td><td>⬜ Not started</td><td></td></tr>
+<tr><td>Notifications</td><td>44–48</td><td>⬜ Not started</td><td></td></tr>
+<tr><td>Loan / EMI</td><td>49–55</td><td>⬜ Not started</td><td></td></tr>
+</table>
+<div class="note"><strong>Gaps worth closing soon:</strong> no automated tests exist yet (only the default empty context-load test), and there's no Postman collection checked in. Roadmap Days 9/15/20/29/36 called for testing checkpoints — worth doing before Audit module work piles on more surface area.</div>
+
+<h2>2. Tech Stack</h2>
+<ul>
+<li><strong>Language / Framework:</strong> Java + Spring Boot (Spring Web, Spring Data JPA, Spring Security)</li>
+<li><strong>Database:</strong> MySQL (<code>banking_db</code>), Hibernate <code>ddl-auto=update</code></li>
+<li><strong>Auth:</strong> JWT (stateless, custom filter), BCrypt password hashing</li>
+<li><strong>Build:</strong> Maven</li>
+<li><strong>Money type:</strong> <code>BigDecimal(precision=18, scale=2)</code> everywhere balances/amounts are stored — avoids float rounding errors, standard practice for financial systems</li>
+</ul>
+
+<h2>3. Package Structure</h2>
+<pre>org.example.enterprisedigitalbankingsystem
+├── auth/            User, Role, UserStatus, UserRepository, UserService(+Impl), DTOs, AuthController
+├── customer/        Customer, KYCStatus, repository, mapper, service(+Impl), DTOs, CustomerController
+├── account/         Account, AccountType, AccountStatus, repository, mapper, service(+Impl), DTOs, AccountController
+├── transaction/     Transaction, TransactionType, TransactionStatus, repository, mapper, service(+Impl), DTOs, TransactionController
+├── ledger/          LedgerEntry, EntryType, repository, mapper, service(+Impl), LedgerController
+├── security/        JwtUtil, JwtAuthenticationFilter, JwtAuthenticationEntryPoint, SecurityConfig, CustomUserDetails(+Service)
+├── exception/       GlobalExceptionHandler, ErrorResponse, 6 custom exceptions
+└── config/          SecurityBeansConfig (PasswordEncoder bean etc.)</pre>
+<p>Each business module follows the same layered pattern: <code>entity → repository → service (interface + impl) → mapper → controller</code>, with request/response DTOs kept separate from entities.</p>
+
+<h2>4. ER Diagram</h2>
+<pre class="mermaid">
+erDiagram
+    USER ||--o| CUSTOMER : "has profile"
+    CUSTOMER ||--o{ ACCOUNT : owns
+    ACCOUNT ||--o{ TRANSACTION : "source of"
+    ACCOUNT ||--o{ TRANSACTION : "destination of"
+    TRANSACTION ||--o{ LEDGER_ENTRY : "produces"
+    ACCOUNT ||--o{ LEDGER_ENTRY : "posted to"
+
+    USER {
+        UUID userId PK
+        string fullName
+        string username UK
+        string email UK
+        string password
+        string phoneNumber UK
+        enum role
+        enum status
+        boolean kycVerified
+        boolean emailVerified
+        boolean phoneVerified
+        datetime lastLogin
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    CUSTOMER {
+        long id PK
+        UUID user_id FK
+        string firstName
+        string lastName
+        date dateOfBirth
+        string phoneNumber UK
+        string address
+        string city
+        string state
+        string country
+        string postalCode
+        enum kycStatus
+        string panNumber UK
+        string aadhaarNumber UK
+        datetime createdAt
+    }
+
+    ACCOUNT {
+        long id PK
+        string accountNumber UK
+        long customer_id FK
+        string accountHolderName
+        string branch
+        decimal balance
+        enum accountType
+        enum accountStatus
+        datetime createdAt
+        datetime updatedAt
+        long version
+    }
+
+    TRANSACTION {
+        long id PK
+        string transactionReference UK
+        long source_account_id FK
+        long destination_account_id FK
+        decimal amount
+        enum transactionType
+        enum transactionStatus
+        decimal balanceAfterTransaction
+        string remarks
+        datetime createdAt
+    }
+
+    LEDGER_ENTRY {
+        long id PK
+        long transaction_id FK
+        long account_id FK
+        enum entryType
+        decimal amount
+        decimal balanceAfterEntry
+        string narration
+        datetime createdAt
+    }
+</pre>
+
+<p><strong>Relationship notes:</strong></p>
+<ul>
+<li><code>User ↔ Customer</code> is 1:1 — a <code>User</code> is the login/auth identity, <code>Customer</code> is the KYC/banking profile. Kept separate so <code>Role.EMPLOYEE</code>/<code>ADMIN</code>/<code>MANAGER</code>/<code>AUDITOR</code> users can exist without needing a Customer record.</li>
+<li><code>Customer → Account</code> is 1:many — one customer can hold multiple accounts (savings + current).</li>
+<li><code>Transaction.sourceAccount</code> / <code>destinationAccount</code> are both nullable FKs to <code>Account</code> — a deposit only sets <code>destination</code>, a withdrawal only sets <code>source</code>, a transfer sets both. This is why the entity has two separate <code>@ManyToOne</code> fields instead of one.</li>
+<li>Every <code>Transaction</code> produces one or two <code>LedgerEntry</code> rows (double-entry bookkeeping) — 1 for deposit/withdrawal, 2 (one DEBIT + one CREDIT) for transfer.</li>
+</ul>
+
+<h2>5. Database Schema (as generated by Hibernate <code>ddl-auto=update</code>)</h2>
+<table>
+<tr><th>Table</th><th>Key Columns</th><th>Constraints</th></tr>
+<tr><td><code>users</code></td><td><code>user_id (UUID, PK)</code>, <code>username</code>, <code>email</code>, <code>phone_number</code></td><td>unique on username, email, phone_number</td></tr>
+<tr><td><code>customers</code></td><td><code>id (PK)</code>, <code>user_id (FK→users, unique)</code>, <code>pan_number</code>, <code>aadhaar_number</code>, <code>phone_number</code></td><td>unique on user_id, phone_number, pan_number, aadhaar_number</td></tr>
+<tr><td><code>accounts</code></td><td><code>id (PK)</code>, <code>account_number</code>, <code>customer_id (FK→customers)</code>, <code>balance</code>, <code>version</code></td><td>unique on account_number; <code>version</code> column enables optimistic locking (<code>@Version</code>)</td></tr>
+<tr><td><code>transactions</code></td><td><code>id (PK)</code>, <code>transaction_reference</code>, <code>source_account_id (FK, nullable)</code>, <code>destination_account_id (FK, nullable)</code></td><td>unique on transaction_reference</td></tr>
+<tr><td><code>ledger_entries</code></td><td><code>id (PK)</code>, <code>transaction_id (FK→transactions)</code>, <code>account_id (FK→accounts)</code></td><td>not-null on transaction_id, account_id, entry_type, amount</td></tr>
+</table>
+<div class="note">No Flyway/Liquibase yet — schema is auto-managed by Hibernate. This is fine for solo dev but <strong>must be replaced with versioned migrations before Day 69 (Flyway) / production deployment</strong> since <code>ddl-auto=update</code> is unsafe for real environments (silent, uncontrolled schema drift).</div>
+
+<h2>6. Data Flow Diagrams</h2>
+<h3>6.1 Authentication Flow</h3>
+<pre class="mermaid">
+sequenceDiagram
+    participant Client
+    participant AuthController
+    participant UserService
+    participant BCrypt
+    participant UserRepository
+    participant JwtUtil
+
+    Client->>AuthController: POST /auth/register
+    AuthController->>UserService: register(request)
+    UserService->>BCrypt: encode(password)
+    UserService->>UserRepository: save(User)
+    UserService-->>AuthController: RegisterResponse
+    AuthController-->>Client: 200 OK
+
+    Client->>AuthController: POST /auth/login
+    AuthController->>UserService: login(request)
+    UserService->>UserRepository: findByUsername/email
+    UserService->>BCrypt: matches(rawPassword, hash)
+    UserService->>JwtUtil: generateToken(user)
+    UserService-->>AuthController: LoginResponse (JWT)
+    AuthController-->>Client: 200 OK plus token
+
+    Client->>JwtAuthenticationFilter: request with Authorization Bearer token
+    JwtAuthenticationFilter->>JwtUtil: validateToken and extract claims
+    JwtAuthenticationFilter->>SecurityContext: set Authentication
+    JwtAuthenticationFilter-->>Client: proceeds to controller or 401
+</pre>
+
+<h3>6.2 Transaction + Double-Entry Ledger Flow (Transfer example)</h3>
+<pre class="mermaid">
+sequenceDiagram
+    participant Client
+    participant TransactionController
+    participant TransactionServiceImpl
+    participant AccountRepository
+    participant TransactionRepository
+    participant LedgerServiceImpl
+    participant LedgerRepository
+
+    Client->>TransactionController: POST /api/v1/transactions/transfer
+    TransactionController->>TransactionServiceImpl: transfer(request)
+    TransactionServiceImpl->>AccountRepository: findById(sourceAccountId)
+    TransactionServiceImpl->>AccountRepository: findById(destinationAccountId)
+    TransactionServiceImpl->>TransactionServiceImpl: validate status, balance, source not equal destination
+    TransactionServiceImpl->>TransactionServiceImpl: debit source, credit destination
+    TransactionServiceImpl->>AccountRepository: save both accounts
+    TransactionServiceImpl->>TransactionRepository: save Transaction status SUCCESS
+    TransactionServiceImpl->>LedgerServiceImpl: recordTransactionEntries(transaction)
+    LedgerServiceImpl->>LedgerRepository: save DEBIT entry source account
+    LedgerServiceImpl->>LedgerRepository: save CREDIT entry destination account
+    TransactionServiceImpl-->>TransactionController: TransactionResponse
+    TransactionController-->>Client: 201 Created
+</pre>
+
+<p><strong>Key design points:</strong></p>
+<ul>
+<li>The whole flow runs inside one <code>@Transactional</code> boundary (class-level on <code>TransactionServiceImpl</code> and <code>LedgerServiceImpl</code>) — if ledger recording fails, the balance updates and transaction row roll back too. No partial state.</li>
+<li>Balance checks happen <strong>before</strong> any mutation (<code>insufficient balance</code> → <code>BadRequestException</code>, caught by <code>GlobalExceptionHandler</code>).</li>
+<li><code>generateUniqueTransactionReference()</code> loops with <code>SecureRandom</code> until a non-colliding <code>TXN...</code> reference is found — collision-checked against the DB.</li>
+<li>Deposit → 1 ledger entry (CREDIT). Withdrawal → 1 ledger entry (DEBIT). Transfer → 2 ledger entries (DEBIT + CREDIT), which is the actual "double-entry" part.</li>
+</ul>
+
+<h2>7. API Reference</h2>
+
+<h3>Auth — <code>/auth</code> (public, no JWT required)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Response</th></tr>
+<tr><td>POST</td><td><code>/auth/register</code></td><td>RegisterRequest</td><td>RegisterResponse</td></tr>
+<tr><td>POST</td><td><code>/auth/login</code></td><td>LoginRequest</td><td>LoginResponse (JWT token)</td></tr>
+</table>
+
+<h3>Customer — <code>/api/v1/customers</code> (JWT required)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Response</th></tr>
+<tr><td>POST</td><td><code>/api/v1/customers</code></td><td>CreateCustomerRequest</td><td>CustomerResponse (201)</td></tr>
+<tr><td>GET</td><td><code>/api/v1/customers/{customerId}</code></td><td>—</td><td>CustomerResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/customers/user/{userId}</code></td><td>—</td><td>CustomerResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/customers</code></td><td>—</td><td>List&lt;CustomerSummaryResponse&gt;</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/customers/{customerId}</code></td><td>UpdateCustomerRequest</td><td>CustomerResponse</td></tr>
+<tr><td>PATCH</td><td><code>/api/v1/customers/{customerId}/kyc</code></td><td>CompleteKYCRequest</td><td>CustomerResponse</td></tr>
+<tr><td>DELETE</td><td><code>/api/v1/customers/{customerId}</code></td><td>—</td><td>204 No Content</td></tr>
+</table>
+
+<h3>Account — <code>/api/v1/accounts</code> (JWT required)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Response</th></tr>
+<tr><td>POST</td><td><code>/api/v1/accounts</code></td><td>CreateAccountRequest</td><td>AccountResponse (201)</td></tr>
+<tr><td>GET</td><td><code>/api/v1/accounts/{accountId}</code></td><td>—</td><td>AccountResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/accounts/number/{accountNumber}</code></td><td>—</td><td>AccountResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/accounts/customer/{customerId}</code></td><td>—</td><td>List&lt;AccountSummaryResponse&gt;</td></tr>
+<tr><td>PUT</td><td><code>/api/v1/accounts/{accountId}</code></td><td>UpdateAccountRequest</td><td>AccountResponse</td></tr>
+<tr><td>PATCH</td><td><code>/api/v1/accounts/{accountId}/freeze</code></td><td>FreezeAccountRequest</td><td>AccountResponse</td></tr>
+<tr><td>PATCH</td><td><code>/api/v1/accounts/{accountId}/close</code></td><td>CloseAccountRequest</td><td>AccountResponse</td></tr>
+</table>
+
+<h3>Transaction — <code>/api/v1/transactions</code> (JWT required)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Response</th></tr>
+<tr><td>POST</td><td><code>/api/v1/transactions/deposit</code></td><td>DepositRequest</td><td>TransactionResponse (201)</td></tr>
+<tr><td>POST</td><td><code>/api/v1/transactions/withdraw</code></td><td>WithdrawRequest</td><td>TransactionResponse (201)</td></tr>
+<tr><td>POST</td><td><code>/api/v1/transactions/transfer</code></td><td>TransferRequest</td><td>TransactionResponse (201)</td></tr>
+<tr><td>GET</td><td><code>/api/v1/transactions/{transactionId}</code></td><td>—</td><td>TransactionResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/transactions/reference/{transactionReference}</code></td><td>—</td><td>TransactionResponse</td></tr>
+<tr><td>GET</td><td><code>/api/v1/transactions/account/{accountId}/history</code></td><td>—</td><td>List&lt;TransactionSummaryResponse&gt;</td></tr>
+</table>
+
+<h3>Ledger — <code>/api/v1/ledger</code> (JWT required)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Response</th></tr>
+<tr><td>GET</td><td><code>/api/v1/ledger/account/{accountId}</code></td><td>List&lt;LedgerEntryResponse&gt;</td></tr>
+<tr><td>GET</td><td><code>/api/v1/ledger/transaction/{transactionId}</code></td><td>List&lt;LedgerEntryResponse&gt;</td></tr>
+</table>
+
+<div class="note">⚠️ <strong>Note:</strong> <code>SecurityConfig</code> currently permits only <code>/auth/**</code> without authentication; every other endpoint (<code>anyRequest().authenticated()</code>) requires a valid JWT in <code>Authorization: Bearer &lt;token&gt;</code>.</div>
+
+<h2>8. Domain Enums</h2>
+<table>
+<tr><th>Enum</th><th>Values</th></tr>
+<tr><td><code>Role</code></td><td>CUSTOMER, MANAGER, EMPLOYEE, ADMIN, AUDITOR</td></tr>
+<tr><td><code>UserStatus</code></td><td>ACTIVE, INACTIVE, BLOCKED, SUSPENDED</td></tr>
+<tr><td><code>KYCStatus</code></td><td>PENDING, IN_PROGRESS, VERIFIED, REJECTED</td></tr>
+<tr><td><code>AccountType</code></td><td>SAVINGS, CURRENT</td></tr>
+<tr><td><code>AccountStatus</code></td><td>ACTIVE, BLOCKED, FROZEN, CLOSED</td></tr>
+<tr><td><code>TransactionType</code></td><td>DEPOSIT, WITHDRAWAL, TRANSFER</td></tr>
+<tr><td><code>TransactionStatus</code></td><td>PENDING, SUCCESS, FAILED, REVERSED</td></tr>
+<tr><td><code>EntryType</code></td><td>DEBIT, CREDIT</td></tr>
+</table>
+
+<h2>9. Security Notes</h2>
+<ul>
+<li><strong>Password hashing:</strong> BCrypt via <code>PasswordEncoder</code> bean (<code>SecurityBeansConfig</code>).</li>
+<li><strong>JWT filter chain:</strong> <code>JwtAuthenticationFilter</code> runs before <code>UsernamePasswordAuthenticationFilter</code>, extracts and validates the token, and populates <code>SecurityContext</code>.</li>
+<li><strong>Session policy:</strong> <code>STATELESS</code> — no server-side session, every request re-authenticates via the token.</li>
+<li><strong>Unauthorized access:</strong> handled by <code>JwtAuthenticationEntryPoint</code>, returning a structured 401 instead of the default Spring redirect/HTML page.</li>
+<li><strong>CSRF:</strong> disabled — appropriate here since this is a stateless token-based API, not cookie/session-based.</li>
+</ul>
+
+<h2>10. Key Annotations Used (and why)</h2>
+<table>
+<tr><th>Annotation</th><th>Where</th><th>Why</th></tr>
+<tr><td><code>@Entity</code>, <code>@Table</code></td><td>all entities</td><td>JPA persistence mapping</td></tr>
+<tr><td><code>@Id</code>, <code>@GeneratedValue</code></td><td>all entities</td><td>PK strategy — IDENTITY for most, UUID for User (avoids exposing sequential/guessable user IDs)</td></tr>
+<tr><td><code>@ManyToOne</code>, <code>@OneToOne</code>, <code>@JoinColumn</code></td><td>Customer, Account, Transaction, LedgerEntry</td><td>relationship mapping; all lazy-fetched to avoid N+1 / over-fetching</td></tr>
+<tr><td><code>@Version</code></td><td>Account</td><td>optimistic locking — prevents lost updates when two transactions hit the same account concurrently</td></tr>
+<tr><td><code>@PrePersist</code> / <code>@PreUpdate</code></td><td>all entities</td><td>auto-stamp createdAt/updatedAt, default enum values (e.g. AccountStatus.ACTIVE, TransactionStatus.PENDING)</td></tr>
+<tr><td><code>@Transactional</code> (class-level)</td><td>all *ServiceImpl</td><td>wraps each service method in a DB transaction so multi-step writes (balance update + transaction row + ledger rows) commit or roll back atomically</td></tr>
+<tr><td><code>@Transactional(readOnly = true)</code></td><td>read methods</td><td>hints Hibernate to skip dirty-checking/flush for read paths</td></tr>
+<tr><td><code>@RestController</code>, <code>@RequestMapping</code></td><td>controllers</td><td>REST endpoint mapping</td></tr>
+<tr><td><code>@Valid</code>, <code>@RequestBody</code></td><td>controller methods</td><td>triggers Bean Validation on incoming DTOs before hitting service layer</td></tr>
+<tr><td><code>@RequiredArgsConstructor</code> (Lombok)</td><td>services, controllers</td><td>constructor injection for final fields without boilerplate</td></tr>
+<tr><td><code>@Builder</code>, <code>@Getter</code>, <code>@Setter</code> (Lombok)</td><td>entities</td><td>reduces boilerplate; @Builder used heavily when constructing entities in service/ledger code</td></tr>
+<tr><td><code>@ControllerAdvice</code> / <code>@ExceptionHandler</code></td><td>GlobalExceptionHandler</td><td>centralizes error → HTTP response mapping (Day 10 deliverable)</td></tr>
+</table>
+
+<h2>11. Known Gaps / Tech Debt</h2>
+<ol>
+<li><strong>No automated tests.</strong> Only the default empty EnterpriseDigitalBankingSystemApplicationTests. No Postman collection checked in either.</li>
+<li><strong>No daily dev notes</strong> — the roadmap's Daily Rule (classes created, annotations, business logic, interview notes per day) hasn't been kept; this doc is a retroactive catch-up, not a replacement for going forward.</li>
+<li><strong><code>ddl-auto=update</code></strong> — fine for now, but needs to become Flyway migrations before Day 69 / before any real deployment.</li>
+<li><strong>Ledger is coupled synchronously</strong> into TransactionServiceImpl — correct for now given the shared @Transactional boundary, but will need to be revisited once Kafka/event-driven notifications are introduced (Day 58+) so ledger writes stay authoritative and don't become a bottleneck.</li>
+<li><strong>No audit trail yet</strong> (Day 37 module) — currently nothing records who performed an action, only what happened via the ledger.</li>
+</ol>
+
+<h2>12. Next Up (Day 36+)</h2>
+<ul>
+<li>Day 36: finish Ledger testing/verification (double-entry sums should net to zero per transaction).</li>
+<li>Day 37–40: Audit module — AuditLog entity, automatic logging (likely via AOP @Around on service methods, or a Spring event listener), audit history APIs.</li>
+<li>Before starting Audit: recommend adding a minimal test suite (deposit/withdraw/transfer + ledger balance assertions) so future changes have a regression safety net.</li>
+</ul>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+</script>
+</body>
+</html>
