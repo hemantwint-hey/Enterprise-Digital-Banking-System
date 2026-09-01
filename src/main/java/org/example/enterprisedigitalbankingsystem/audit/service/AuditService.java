@@ -11,6 +11,9 @@ public interface AuditService {
     void log(User performedBy, AuditAction action, String entityName, String entityId,
               String oldValue, String newValue, String description, String ipAddress);
 
+    void log(AuditAction action, String entityName, String entityId,
+              String oldValue, String newValue, String description);
+
     List<AuditLogResponse> getAllAuditLogs();
     List<AuditLogResponse> getAuditLogsByEntity(String entityName, String entityId);
     List<AuditLogResponse> getAuditLogsByUser(UUID userId);

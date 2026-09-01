@@ -9,6 +9,8 @@ import org.example.enterprisedigitalbankingsystem.auth.entity.Role;
 import org.example.enterprisedigitalbankingsystem.auth.entity.User;
 import org.example.enterprisedigitalbankingsystem.auth.entity.UserStatus;
 import org.example.enterprisedigitalbankingsystem.auth.repository.UserRepository;
+import org.example.enterprisedigitalbankingsystem.audit.entity.AuditAction;
+import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
 import org.example.enterprisedigitalbankingsystem.exception.InvalidCredentialsException;
 import org.example.enterprisedigitalbankingsystem.exception.UserAlreadyExistsException;
 import org.example.enterprisedigitalbankingsystem.exception.UserNotFoundException;
@@ -23,11 +25,14 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final AuditService auditService;
 
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
+                            AuditService auditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.auditService = auditService;
     }
 
     @Override
@@ -53,6 +58,9 @@ public class UserServiceImpl implements UserService {
                 .build();
         userRepository.save(user);
 
+        auditService.log(user, AuditAction.CREATE, "User", user.getUserId().toString(),
+                null, "email=" + user.getEmail(), "User registered", null);
+
         return RegisterResponse.builder()
                 .success(true)
                 .message("User Registered Successfully")
@@ -62,12 +70,22 @@ public class UserServiceImpl implements UserService {
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
-                .orElseThrow(()-> new UserNotFoundException("Invalid email id"));
+                .orElse(null);
+        if (user == null) {
+            auditService.log(null, AuditAction.LOGIN_FAILED, "User", loginRequest.getEmail(),
+                    null, null, "Login failed: user not found", null);
+            throw new UserNotFoundException("Invalid email id");
+        }
         if(!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())){
+            auditService.log(user, AuditAction.LOGIN_FAILED, "User", user.getUserId().toString(),
+                    null, null, "Login failed: invalid password", null);
             throw new InvalidCredentialsException("Password didnt match");
         }
 
         String token = jwtUtil.generateToken(user.getEmail());
+
+        auditService.log(user, AuditAction.LOGIN, "User", user.getUserId().toString(),
+                null, null, "Login successful", null);
 
         return LoginResponse.builder()
                 .success(true)

@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
+import org.example.enterprisedigitalbankingsystem.audit.entity.AuditAction;
+import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.ledger.service.LedgerService;
@@ -36,6 +38,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final AccountRepository accountRepository;
     private final TransactionMapper transactionMapper;
     private final LedgerService ledgerService;
+    private final AuditService auditService;
 
     @Override
     public TransactionResponse deposit(DepositRequest request) {
@@ -61,6 +64,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         transaction = transactionRepository.save(transaction);
         ledgerService.recordTransactionEntries(transaction);
+
+        auditService.log(AuditAction.CREATE, "Transaction", transaction.getId().toString(),
+                null, "amount=" + transaction.getAmount() + ", account=" + account.getAccountNumber(),
+                "Deposit made");
+
         return transactionMapper.toResponse(transaction);
     }
 
@@ -96,6 +104,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         transaction = transactionRepository.save(transaction);
         ledgerService.recordTransactionEntries(transaction);
+
+        auditService.log(AuditAction.CREATE, "Transaction", transaction.getId().toString(),
+                null, "amount=" + transaction.getAmount() + ", account=" + account.getAccountNumber(),
+                "Withdrawal made");
+
         return transactionMapper.toResponse(transaction);
     }
 
@@ -166,6 +179,12 @@ public class TransactionServiceImpl implements TransactionService {
 
         transaction = transactionRepository.save(transaction);
         ledgerService.recordTransactionEntries(transaction);
+
+        auditService.log(AuditAction.CREATE, "Transaction", transaction.getId().toString(),
+                null, "amount=" + amount + ", from=" + sourceAccount.getAccountNumber()
+                + ", to=" + destinationAccount.getAccountNumber(),
+                "Transfer made");
+
         return transactionMapper.toResponse(transaction);
     }
 

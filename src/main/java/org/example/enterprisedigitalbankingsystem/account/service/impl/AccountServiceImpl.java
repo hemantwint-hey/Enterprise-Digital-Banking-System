@@ -12,6 +12,8 @@ import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.mapper.AccountMapper;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.account.service.AccountService;
+import org.example.enterprisedigitalbankingsystem.audit.entity.AuditAction;
+import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
 import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
@@ -33,6 +35,7 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
     private final AccountMapper accountMapper;
+    private final AuditService auditService;
 
     @Override
     public AccountResponse createAccount(CreateAccountRequest request) {
@@ -49,7 +52,13 @@ public class AccountServiceImpl implements AccountService {
                 .accountStatus(AccountStatus.ACTIVE)
                 .build();
 
-        return accountMapper.toResponse(accountRepository.save(account));
+        account = accountRepository.save(account);
+
+        auditService.log(AuditAction.CREATE, "Account", account.getId().toString(),
+                null, "accountNumber=" + account.getAccountNumber() + ", balance=" + account.getBalance(),
+                "Account created");
+
+        return accountMapper.toResponse(account);
     }
 
     @Override
@@ -86,8 +95,12 @@ public class AccountServiceImpl implements AccountService {
 
         validateAccountNotClosed(account);
         accountMapper.updateEntity(account, request);
+        account = accountRepository.save(account);
 
-        return accountMapper.toResponse(accountRepository.save(account));
+        auditService.log(AuditAction.UPDATE, "Account", account.getId().toString(),
+                null, null, "Account details updated");
+
+        return accountMapper.toResponse(account);
     }
 
     @Override
@@ -99,8 +112,14 @@ public class AccountServiceImpl implements AccountService {
             throw new BadRequestException("Account is already frozen");
         }
 
+        AccountStatus oldStatus = account.getAccountStatus();
         account.setAccountStatus(AccountStatus.FROZEN);
-        return accountMapper.toResponse(accountRepository.save(account));
+        account = accountRepository.save(account);
+
+        auditService.log(AuditAction.UPDATE, "Account", account.getId().toString(),
+                oldStatus.name(), AccountStatus.FROZEN.name(), "Account frozen");
+
+        return accountMapper.toResponse(account);
     }
 
     @Override
@@ -112,8 +131,14 @@ public class AccountServiceImpl implements AccountService {
             throw new BadRequestException("Account balance must be zero before closing");
         }
 
+        AccountStatus oldStatus = account.getAccountStatus();
         account.setAccountStatus(AccountStatus.CLOSED);
-        return accountMapper.toResponse(accountRepository.save(account));
+        account = accountRepository.save(account);
+
+        auditService.log(AuditAction.UPDATE, "Account", account.getId().toString(),
+                oldStatus.name(), AccountStatus.CLOSED.name(), "Account closed");
+
+        return accountMapper.toResponse(account);
     }
 
     private Account findAccountById(Long accountId) {
