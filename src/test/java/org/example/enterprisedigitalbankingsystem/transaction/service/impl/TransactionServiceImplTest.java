@@ -4,6 +4,7 @@ import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
+import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.ledger.service.LedgerService;
@@ -45,6 +46,9 @@ class TransactionServiceImplTest {
     @Mock
     private LedgerService ledgerService;
 
+    @Mock
+    private AuditService auditService;
+
     private TransactionServiceImpl transactionService;
 
     private Account sourceAccount;
@@ -53,7 +57,7 @@ class TransactionServiceImplTest {
     @BeforeEach
     void setUp() {
         transactionService = new TransactionServiceImpl(
-                transactionRepository, accountRepository, new TransactionMapper(), ledgerService);
+                transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService);
 
         sourceAccount = Account.builder()
                 .id(1L)
@@ -79,7 +83,13 @@ class TransactionServiceImplTest {
     private void stubTransactionPersistence() {
         when(transactionRepository.existsByTransactionReference(anyString())).thenReturn(false);
         when(transactionRepository.save(any(Transaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    Transaction transaction = invocation.getArgument(0);
+                    if (transaction.getId() == null) {
+                        transaction.setId(1L);
+                    }
+                    return transaction;
+                });
     }
 
     // ---------------- Deposit ----------------
