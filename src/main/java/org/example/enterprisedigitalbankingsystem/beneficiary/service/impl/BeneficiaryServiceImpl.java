@@ -97,6 +97,25 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
     }
 
     @Override
+    public BeneficiaryResponse activateBeneficiary(Long beneficiaryId) {
+        Beneficiary beneficiary = findBeneficiaryById(beneficiaryId);
+
+        if (beneficiary.getStatus() != BeneficiaryStatus.PENDING) {
+            throw new BadRequestException(
+                    "Beneficiary is " + beneficiary.getStatus() + " and cannot be activated");
+        }
+
+        BeneficiaryStatus oldStatus = beneficiary.getStatus();
+        beneficiary.setStatus(BeneficiaryStatus.ACTIVE);
+        beneficiary = beneficiaryRepository.save(beneficiary);
+
+        auditService.log(AuditAction.UPDATE, "Beneficiary", beneficiary.getId().toString(),
+                oldStatus.toString(), beneficiary.getStatus().toString(), "Beneficiary activated");
+
+        return beneficiaryMapper.toResponse(beneficiary);
+    }
+
+    @Override
     public void deleteBeneficiary(Long beneficiaryId) {
         Beneficiary beneficiary = findBeneficiaryById(beneficiaryId);
 

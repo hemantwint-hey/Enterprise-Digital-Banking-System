@@ -5,6 +5,10 @@ import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
+import org.example.enterprisedigitalbankingsystem.beneficiary.entity.Beneficiary;
+import org.example.enterprisedigitalbankingsystem.beneficiary.entity.BeneficiaryStatus;
+import org.example.enterprisedigitalbankingsystem.beneficiary.repository.BeneficiaryRepository;
+import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.ledger.service.LedgerService;
@@ -49,19 +53,27 @@ class TransactionServiceImplTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private BeneficiaryRepository beneficiaryRepository;
+
     private TransactionServiceImpl transactionService;
 
+    private Customer sourceCustomer;
     private Account sourceAccount;
     private Account destinationAccount;
 
     @BeforeEach
     void setUp() {
         transactionService = new TransactionServiceImpl(
-                transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService);
+                transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService,
+                beneficiaryRepository);
+
+        sourceCustomer = Customer.builder().id(1L).build();
 
         sourceAccount = Account.builder()
                 .id(1L)
                 .accountNumber("ACC-SOURCE-001")
+                .customer(sourceCustomer)
                 .accountHolderName("Alice")
                 .branch("Main")
                 .balance(new BigDecimal("1000.00"))
@@ -245,6 +257,124 @@ class TransactionServiceImplTest {
         assertThatThrownBy(() -> transactionService.transfer(request))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("CLOSED");
+        verifyNoInteractions(ledgerService);
+    }
+
+    // ---------------- Transfer via Beneficiary ----------------
+
+    private Beneficiary buildBeneficiary(BeneficiaryStatus status, Customer customer, Account account) {
+        return Beneficiary.builder()
+                .id(50L)
+                .customer(customer)
+                .beneficiaryAccount(account)
+                .nickName("Bob Savings")
+                .status(status)
+                .build();
+    }
+
+    @Test
+    void transfer_viaActiveBeneficiary_movesFundsToBeneficiaryAccount() {
+        Beneficiary beneficiary = buildBeneficiary(BeneficiaryStatus.ACTIVE, sourceCustomer, destinationAccount);
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+        when(beneficiaryRepository.findById(50L)).thenReturn(Optional.of(beneficiary));
+        stubTransactionPersistence();
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .beneficiaryId(50L)
+                .amount(new BigDecimal("250.00"))
+                .build();
+
+        TransactionResponse response = transactionService.transfer(request);
+
+        assertThat(sourceAccount.getBalance()).isEqualByComparingTo("750.00");
+        assertThat(destinationAccount.getBalance()).isEqualByComparingTo("450.00");
+        assertThat(response.getAmount()).isEqualByComparingTo("250.00");
+        verify(ledgerService).recordTransactionEntries(any(Transaction.class));
+    }
+
+    @Test
+    void transfer_withBothDestinationAccountIdAndBeneficiaryId_throwsBadRequestException() {
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .destinationAccountId(2L)
+                .beneficiaryId(50L)
+                .amount(BigDecimal.TEN)
+                .build();
+
+        assertThatThrownBy(() -> transactionService.transfer(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("exactly one");
+        verifyNoInteractions(ledgerService);
+    }
+
+    @Test
+    void transfer_withNeitherDestinationAccountIdNorBeneficiaryId_throwsBadRequestException() {
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .amount(BigDecimal.TEN)
+                .build();
+
+        assertThatThrownBy(() -> transactionService.transfer(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("exactly one");
+        verifyNoInteractions(ledgerService);
+    }
+
+    @Test
+    void transfer_viaPendingBeneficiary_throwsBadRequestException() {
+        Beneficiary beneficiary = buildBeneficiary(BeneficiaryStatus.PENDING, sourceCustomer, destinationAccount);
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+        when(beneficiaryRepository.findById(50L)).thenReturn(Optional.of(beneficiary));
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .beneficiaryId(50L)
+                .amount(BigDecimal.TEN)
+                .build();
+
+        assertThatThrownBy(() -> transactionService.transfer(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("PENDING");
+        verifyNoInteractions(ledgerService);
+    }
+
+    @Test
+    void transfer_viaBeneficiaryOwnedByAnotherCustomer_throwsBadRequestException() {
+        Customer otherCustomer = Customer.builder().id(2L).build();
+        Beneficiary beneficiary = buildBeneficiary(BeneficiaryStatus.ACTIVE, otherCustomer, destinationAccount);
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+        when(beneficiaryRepository.findById(50L)).thenReturn(Optional.of(beneficiary));
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .beneficiaryId(50L)
+                .amount(BigDecimal.TEN)
+                .build();
+
+        assertThatThrownBy(() -> transactionService.transfer(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not belong");
+        verifyNoInteractions(ledgerService);
+    }
+
+    @Test
+    void transfer_beneficiaryNotFound_throwsResourceNotFoundException() {
+        when(accountRepository.findById(1L)).thenReturn(Optional.of(sourceAccount));
+        when(beneficiaryRepository.findById(404L)).thenReturn(Optional.empty());
+
+        TransferRequest request = TransferRequest.builder()
+                .sourceAccountId(1L)
+                .beneficiaryId(404L)
+                .amount(BigDecimal.TEN)
+                .build();
+
+        assertThatThrownBy(() -> transactionService.transfer(request))
+                .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(ledgerService);
     }
 }

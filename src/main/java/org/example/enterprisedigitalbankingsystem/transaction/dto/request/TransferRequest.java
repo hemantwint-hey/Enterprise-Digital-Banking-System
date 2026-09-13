@@ -18,8 +18,9 @@ public class TransferRequest {
     @NotNull( message = "Source account id is required")
     private Long sourceAccountId;
 
-    @NotNull(message = "Destination account id is required")
     private Long destinationAccountId;
+
+    private Long beneficiaryId;
 
     @NotNull(message = "Amount is required")
     @DecimalMin(value = "1.00", message = "Amount must be at least 1.00")

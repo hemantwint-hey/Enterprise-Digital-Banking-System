@@ -15,5 +15,7 @@ public interface BeneficiaryService {
 
     BeneficiaryResponse updateBeneficiary(Long beneficiaryId, UpdateBeneficiaryRequest request);
 
+    BeneficiaryResponse activateBeneficiary(Long beneficiaryId);
+
     void deleteBeneficiary(Long beneficiaryId);
 }

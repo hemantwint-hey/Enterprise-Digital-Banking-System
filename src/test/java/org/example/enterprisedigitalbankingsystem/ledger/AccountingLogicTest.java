@@ -5,6 +5,7 @@ import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
+import org.example.enterprisedigitalbankingsystem.beneficiary.repository.BeneficiaryRepository;
 import org.example.enterprisedigitalbankingsystem.ledger.entity.EntryType;
 import org.example.enterprisedigitalbankingsystem.ledger.entity.LedgerEntry;
 import org.example.enterprisedigitalbankingsystem.ledger.mapper.LedgerMapper;
@@ -53,6 +54,8 @@ class AccountingLogicTest {
     private LedgerRepository ledgerRepository;
     @Mock
     private AuditService auditService;
+    @Mock
+    private BeneficiaryRepository beneficiaryRepository;
 
     private TransactionServiceImpl transactionService;
 
@@ -60,7 +63,8 @@ class AccountingLogicTest {
     void setUp() {
         LedgerServiceImpl ledgerService = new LedgerServiceImpl(ledgerRepository, new LedgerMapper());
         transactionService = new TransactionServiceImpl(
-                transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService);
+                transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService,
+                beneficiaryRepository);
 
         when(transactionRepository.existsByTransactionReference(anyString())).thenReturn(false);
         when(transactionRepository.save(any(Transaction.class)))

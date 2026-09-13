@@ -243,6 +243,37 @@ class BeneficiaryServiceImplTest {
     }
 
     @Test
+    void activateBeneficiary_whenPending_activatesAndLogsAudit() {
+        Beneficiary beneficiary = buildBeneficiary(10L, BeneficiaryStatus.PENDING, "Bob Savings");
+        when(beneficiaryRepository.findById(10L)).thenReturn(Optional.of(beneficiary));
+        when(beneficiaryRepository.save(any(Beneficiary.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BeneficiaryResponse response = beneficiaryService.activateBeneficiary(10L);
+
+        assertThat(response.getStatus()).isEqualTo(BeneficiaryStatus.ACTIVE);
+        verify(auditService).log(any(), anyString(), anyString(), eq("PENDING"), eq("ACTIVE"), anyString());
+    }
+
+    @Test
+    void activateBeneficiary_whenAlreadyActive_throwsBadRequestException() {
+        Beneficiary beneficiary = buildBeneficiary(10L, BeneficiaryStatus.ACTIVE, "Bob Savings");
+        when(beneficiaryRepository.findById(10L)).thenReturn(Optional.of(beneficiary));
+
+        assertThatThrownBy(() -> beneficiaryService.activateBeneficiary(10L))
+                .isInstanceOf(BadRequestException.class);
+
+        verify(beneficiaryRepository, never()).save(any());
+    }
+
+    @Test
+    void activateBeneficiary_whenNotFound_throwsResourceNotFoundException() {
+        when(beneficiaryRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> beneficiaryService.activateBeneficiary(404L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void deleteBeneficiary_whenFound_deletesAndLogsAudit() {
         Beneficiary beneficiary = buildBeneficiary(10L, BeneficiaryStatus.ACTIVE, "Bob Savings");
         when(beneficiaryRepository.findById(10L)).thenReturn(Optional.of(beneficiary));

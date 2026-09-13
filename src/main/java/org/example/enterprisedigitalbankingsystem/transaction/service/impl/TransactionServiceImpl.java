@@ -6,6 +6,9 @@ import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
 import org.example.enterprisedigitalbankingsystem.audit.entity.AuditAction;
 import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
+import org.example.enterprisedigitalbankingsystem.beneficiary.entity.Beneficiary;
+import org.example.enterprisedigitalbankingsystem.beneficiary.entity.BeneficiaryStatus;
+import org.example.enterprisedigitalbankingsystem.beneficiary.repository.BeneficiaryRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.ledger.service.LedgerService;
@@ -39,6 +42,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionMapper transactionMapper;
     private final LedgerService ledgerService;
     private final AuditService auditService;
+    private final BeneficiaryRepository beneficiaryRepository;
 
     @Override
     public TransactionResponse deposit(DepositRequest request) {
@@ -112,6 +116,37 @@ public class TransactionServiceImpl implements TransactionService {
         return transactionMapper.toResponse(transaction);
     }
 
+    private Account resolveDestinationAccount(TransferRequest request, Account sourceAccount) {
+        boolean hasDestinationAccountId = request.getDestinationAccountId() != null;
+        boolean hasBeneficiaryId = request.getBeneficiaryId() != null;
+
+        if (hasDestinationAccountId == hasBeneficiaryId) {
+            throw new BadRequestException(
+                    "Provide exactly one of destinationAccountId or beneficiaryId");
+        }
+
+        if (hasBeneficiaryId) {
+            Beneficiary beneficiary = beneficiaryRepository.findById(request.getBeneficiaryId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Beneficiary not found with id: " + request.getBeneficiaryId()));
+
+            if (beneficiary.getStatus() != BeneficiaryStatus.ACTIVE) {
+                throw new BadRequestException(
+                        "Beneficiary is " + beneficiary.getStatus() + " and cannot be used for transfers");
+            }
+
+            if (!beneficiary.getCustomer().getId().equals(sourceAccount.getCustomer().getId())) {
+                throw new BadRequestException("Beneficiary does not belong to the source account holder");
+            }
+
+            return beneficiary.getBeneficiaryAccount();
+        }
+
+        return accountRepository.findById(request.getDestinationAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Destination account not found with id :" + request.getDestinationAccountId()));
+    }
+
     private void validateAccountActive(Account account) {
         if (account.getAccountStatus() != AccountStatus.ACTIVE) {
             throw new BadRequestException(
@@ -139,12 +174,7 @@ public class TransactionServiceImpl implements TransactionService {
                                 "Source account not found with id : "
                                 + request.getSourceAccountId()
                         ));
-        Account destinationAccount =  accountRepository.findById(request.getDestinationAccountId())
-                .orElseThrow(()->
-                        new ResourceNotFoundException(
-                                "Destination account not found with id :"
-                                +request.getDestinationAccountId()
-                        ));
+        Account destinationAccount = resolveDestinationAccount(request, sourceAccount);
         if(sourceAccount.getId().equals(destinationAccount.getId())){
             throw new BadRequestException("Source and Destination cannot be same ");
         }

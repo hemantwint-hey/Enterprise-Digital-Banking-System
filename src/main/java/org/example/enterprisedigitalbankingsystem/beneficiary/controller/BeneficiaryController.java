@@ -46,6 +46,12 @@ public class BeneficiaryController {
         return ResponseEntity.ok(response);
     }
 
+    @PatchMapping("/{beneficiaryId}/activate")
+    public ResponseEntity<BeneficiaryResponse> activateBeneficiary(@PathVariable Long beneficiaryId) {
+        BeneficiaryResponse response = beneficiaryService.activateBeneficiary(beneficiaryId);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{beneficiaryId}")
     public ResponseEntity<Void> deleteBeneficiary(@PathVariable Long beneficiaryId) {
         beneficiaryService.deleteBeneficiary(beneficiaryId);
