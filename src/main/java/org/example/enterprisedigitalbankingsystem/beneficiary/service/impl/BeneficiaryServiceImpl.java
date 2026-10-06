@@ -17,10 +17,14 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
+import org.example.enterprisedigitalbankingsystem.kafka.event.BeneficiaryActivatedEvent;
+import org.example.enterprisedigitalbankingsystem.kafka.producer.BeneficiaryEventProducer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +36,7 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
     private final AccountRepository accountRepository;
     private final BeneficiaryMapper beneficiaryMapper;
     private final AuditService auditService;
-
+    private final BeneficiaryEventProducer beneficiaryEventProducer;
     @Override
     public BeneficiaryResponse addBeneficiary(CreateBeneficiaryRequest request) {
         Customer customer = customerRepository.findById(request.getCustomerId())
@@ -108,6 +112,18 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
         BeneficiaryStatus oldStatus = beneficiary.getStatus();
         beneficiary.setStatus(BeneficiaryStatus.ACTIVE);
         beneficiary = beneficiaryRepository.save(beneficiary);
+
+        beneficiaryEventProducer.publish(BeneficiaryActivatedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .beneficiaryId(beneficiary.getId())
+                .customerId(beneficiary.getCustomer().getId())
+                .userId(beneficiary.getCustomer().getUser().getUserId().toString())
+                .email(beneficiary.getCustomer().getUser().getEmail())
+                .nickName(beneficiary.getNickName())
+                .accountNumber(beneficiary.getBeneficiaryAccount().getAccountNumber())
+                .occurredAt(LocalDateTime.now())
+                .build()
+        );
 
         auditService.log(AuditAction.UPDATE, "Beneficiary", beneficiary.getId().toString(),
                 oldStatus.toString(), beneficiary.getStatus().toString(), "Beneficiary activated");
