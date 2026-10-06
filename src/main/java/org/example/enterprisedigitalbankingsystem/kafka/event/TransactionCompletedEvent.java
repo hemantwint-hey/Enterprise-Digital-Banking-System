@@ -15,7 +15,7 @@ public class TransactionCompletedEvent {
     private String transactionReference;
     private String transactionType;
     private Long accountId;
-    private Long accountNumber;
+    private String accountNumber;
     private Long customerId;
     private String userId;
     private String email;
