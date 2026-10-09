@@ -18,6 +18,7 @@ public class LoanMapper {
                 .interestRate(loan.getInterestRate())
                 .tenureMonths(loan.getTenureMonths())
                 .emiAmount(loan.getEmiAmount())
+                .status(loan.getStatus())
                 .createdAt(loan.getCreatedAt())
                 .approvedAt(loan.getApprovedAt())
                 .closedAt(loan.getClosedAt())
