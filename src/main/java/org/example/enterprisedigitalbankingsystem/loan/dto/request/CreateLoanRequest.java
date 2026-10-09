@@ -34,4 +34,6 @@ public class CreateLoanRequest {
     @Min(value = 1, message = "Tenure must be at least 1 month")
     @Max(value = 360 , message = "Tenure cannot exceed  360 months")
     private Integer tenureMonths;
+
+
 }
