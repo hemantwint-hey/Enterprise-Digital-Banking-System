@@ -9,6 +9,7 @@ import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepo
 import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.emi.service.EmiService;
+import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.loan.dto.request.CreateLoanRequest;
 import org.example.enterprisedigitalbankingsystem.loan.dto.response.LoanResponse;
@@ -17,8 +18,11 @@ import org.example.enterprisedigitalbankingsystem.loan.entity.LoanStatus;
 import org.example.enterprisedigitalbankingsystem.loan.mapper.LoanMapper;
 import org.example.enterprisedigitalbankingsystem.loan.repository.LoanRepository;
 import org.example.enterprisedigitalbankingsystem.loan.service.LoanService;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class LoanServiceImpl implements LoanService {
@@ -69,27 +73,58 @@ public class LoanServiceImpl implements LoanService {
             @Min(value = 1, message = "Tenure must be at least 1 month")
             @Max(value = 360 , message = "Tenure cannot exceed  360 months") Integer tenureMonths) {
 
-        double p =
+        double p = principalAmount.doubleValue();
+        double r = interestRate.doubleValue()/12/100;
+        double factor = Math.pow(1+r,tenureMonths);
+        double emi = p * r* factor /(factor - 1);
+        return BigDecimal.valueOf(emi).setScale(2, RoundingMode.HALF_UP);
 
     }
 
     @Override
+    @Transactional(readOnly = true)
     public LoanResponse getLoanById(Long loanId) {
-        return null;
+        return loanMapper.toResponse(findLoanById(loanId));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<LoanResponse> getLoansByCustomerId(Long customerId) {
-        return List.of();
+        if(!customerRepository.existsById(customerId)){
+            throw new ResourceNotFoundException("Customer not found with id" + customerId);
+        }
+        return loanRepository.findByCustomerId(customerId).stream().map(loanMapper::toResponse).toList();
     }
 
     @Override
     public LoanResponse approveLoan(Long loanId) {
-        return null;
+        Loan loan = findLoanById(loanId);
+        if(loan.getStatus() != LoanStatus.PENDING){
+            throw new BadRequestException("you loan status is" + loan.getStatus() +"so i cannot be approved");
+        }
+        Account account = loan.getDisbursementAccount();
+        account.setBalance(account.getBalance().add(loan.getPrincipalAmount()));
+        accountRepository.save(account);
+
+        loan.setStatus(LoanStatus.ACTIVE);
+        loan.setApprovedAt(LocalDateTime.now());
+        loan = loanRepository.save(loan);
+        emiService.generateSchedule(loan);
+        return loanMapper.toResponse(loan);
     }
 
     @Override
     public LoanResponse rejectLoan(Long loanId) {
-        return null;
+        Loan loan = findLoanById(loanId);
+        if(loan.getStatus() != LoanStatus.PENDING){
+            throw new BadRequestException("Your loan cannot be rejected");
+        }
+        loan.setStatus(LoanStatus.REJECTED);
+        loanRepository.save(loan);
+        return loanMapper.toResponse(loan);
+    }
+    private Loan findLoanById(Long loanId){
+        return loanRepository.findById(loanId)
+                .orElseThrow(() -> new ResourceNotFoundException("this loan Id cannot be found"+ loanId));
     }
 }
