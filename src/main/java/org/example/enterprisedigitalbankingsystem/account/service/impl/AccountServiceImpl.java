@@ -18,6 +18,8 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,12 +65,14 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "accountsById", key = "#accountId")
     public AccountResponse getAccountById(Long accountId) {
         return accountMapper.toResponse(findAccountById(accountId));
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "accountsByNumber", key = "#accountNumber")
     public AccountResponse getAccountByAccountNumber(String accountNumber) {
         Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with account number: " + accountNumber));
@@ -78,6 +82,7 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "accountsByCustomer", key = "#customerId")
     public List<AccountSummaryResponse> getAccountsByCustomerId(Long customerId) {
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
@@ -90,6 +95,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public AccountResponse updateAccount(Long accountId, UpdateAccountRequest request) {
         Account account = findAccountById(accountId);
 
@@ -104,6 +110,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public AccountResponse freezeAccount(Long accountId, FreezeAccountRequest request) {
         Account account = findAccountById(accountId);
 
@@ -123,6 +130,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public AccountResponse closeAccount(Long accountId, CloseAccountRequest request) {
         Account account = findAccountById(accountId);
 

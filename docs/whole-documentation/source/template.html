@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{TITLE}} - Enterprise Digital Banking System</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  :root {
+    --ink: #1b2430; --muted: #5b6675; --line: #d9dee5; --soft: #f4f6f9;
+    --brand: #123e6b; --accent: #1f6fb2; --ok: #1d7a46; --plan: #a35a00; --bad: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.5; margin: 0; background: #fff; }
+  .cover { height: 255mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+  .cover .band { background: var(--brand); color: #fff; padding: 22mm 14mm 16mm; border-radius: 4px; }
+  .cover .kicker { letter-spacing: .18em; text-transform: uppercase; font-size: 9pt; opacity: .8; }
+  .cover h1 { font-size: 30pt; margin: 8mm 0 4mm; line-height: 1.15; }
+  .cover .sub { font-size: 12.5pt; opacity: .92; max-width: 150mm; }
+  .cover .docno { font-size: 60pt; font-weight: 700; opacity: .18; float: right; margin-top: -6mm; }
+  .cover table.meta { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .cover table.meta td { border-top: 1px solid var(--line); padding: 2.2mm 0; }
+  .cover table.meta td:first-child { color: var(--muted); width: 45mm; }
+  .legend { font-size: 9pt; color: var(--muted); margin-top: 5mm; }
+  nav.toc { page-break-after: always; }
+  nav.toc h3 { font-size: 15pt; color: var(--brand); border-bottom: 2px solid var(--brand); padding-bottom: 2mm; }
+  nav.toc ol { font-size: 11pt; line-height: 2; }
+  nav.toc a { color: var(--ink); text-decoration: none; }
+  h2 { font-size: 16pt; color: var(--brand); border-bottom: 2px solid var(--brand); padding-bottom: 1.5mm; margin: 0 0 4mm; page-break-before: always; page-break-after: avoid; }
+  h2.first, nav.toc + h2 { page-break-before: auto; }
+  h3 { font-size: 12.3pt; color: var(--accent); margin: 6mm 0 2mm; page-break-after: avoid; }
+  h4 { font-size: 10.6pt; margin: 4mm 0 1.5mm; page-break-after: avoid; }
+  p { margin: 1.5mm 0 2.5mm; }
+  ul, ol { margin: 1mm 0 3mm; padding-left: 6mm; }
+  li { margin: .6mm 0; }
+  a { color: var(--accent); }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.8pt; background: var(--soft); padding: .2mm 1mm; border-radius: 2px; }
+  pre.code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.3pt; line-height: 1.42; background: #0f1b2a; color: #e6edf5; padding: 3mm 4mm; border-radius: 4px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; }
+  pre.code code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.9pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th { background: var(--brand); color: #fff; text-align: left; padding: 1.6mm 2mm; font-weight: 600; }
+  td { border-bottom: 1px solid var(--line); padding: 1.4mm 2mm; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  td code { font-size: 8.2pt; }
+  .badge { display: inline-block; font-size: 7.4pt; font-weight: 700; letter-spacing: .04em; padding: .3mm 1.6mm; border-radius: 8px; vertical-align: 1px; white-space: nowrap; }
+  .built { background: #e3f4ea; color: var(--ok); }
+  .planned { background: #fdf0dc; color: var(--plan); }
+  .gap { background: #fde7e5; color: var(--bad); }
+  .m { display: inline-block; font-family: Consolas, monospace; font-size: 7.8pt; font-weight: 700; color: #fff; padding: .2mm 1.4mm; border-radius: 2px; min-width: 12mm; text-align: center; }
+  .GET { background: #1f6fb2; } .POST { background: #1d7a46; } .PUT { background: #8a5a00; } .PATCH { background: #6b3fa0; } .DELETE { background: #b42318; }
+  .note { border-left: 3.5px solid var(--accent); background: #eef5fb; padding: 2.5mm 4mm; margin: 3mm 0; page-break-inside: avoid; }
+  .warn { border-left: 3.5px solid var(--plan); background: #fdf6ea; padding: 2.5mm 4mm; margin: 3mm 0; page-break-inside: avoid; }
+  .figure { border: 1px solid var(--line); border-radius: 4px; padding: 3mm; margin: 3mm 0 4mm; page-break-inside: avoid; text-align: center; }
+  .figure .cap { font-size: 8.6pt; color: var(--muted); margin-top: 2mm; }
+  pre.mermaid { background: none; margin: 0; font-family: inherit; }
+  .endpoint { border: 1px solid var(--line); border-radius: 4px; padding: 2.5mm 3.5mm; margin: 3mm 0; page-break-inside: avoid; }
+  .endpoint .path { font-family: Consolas, monospace; font-weight: 700; font-size: 9.6pt; }
+  .endpoint p { margin: 1mm 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .card { border: 1px solid var(--line); border-radius: 4px; padding: 2.5mm 3.5mm; page-break-inside: avoid; }
+  .card h4 { margin-top: 0; }
+  .small { font-size: 8.6pt; color: var(--muted); }
+  .avoid { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+<section class="cover">
+  <div class="band">
+    <div class="docno">{{DOCNO}}</div>
+    <div class="kicker">Enterprise Digital Banking System</div>
+    <h1>{{TITLE}}</h1>
+    <div class="sub">{{SUBTITLE}}</div>
+  </div>
+  <div>
+    <table class="meta">
+      <tr><td>Document</td><td>{{DOCNO}} &mdash; {{TITLE}}</td></tr>
+      <tr><td>System</td><td>Enterprise Digital Banking System (banking-app) + notification-service</td></tr>
+      <tr><td>Stack</td><td>Java 17 &middot; Spring Boot 4.1 &middot; Spring Security + JWT &middot; Spring Data JPA &middot; MySQL 8 &middot; Apache Kafka 3.8 &middot; Redis 7 &middot; Docker</td></tr>
+      <tr><td>Repository</td><td>Enterprise-Digital-Banking-System (branch <code>master</code>)</td></tr>
+      <tr><td>Version / date</td><td>{{VERSION}} &mdash; {{DATE}}</td></tr>
+      <tr><td>Author</td><td>hemantwint-hey</td></tr>
+    </table>
+    <div class="legend">
+      Status tags used throughout:
+      <span class="badge built">BUILT</span> exists in the code today &nbsp;
+      <span class="badge planned">PLANNED</span> part of the target design (roadmap docs 01&ndash;09), not yet implemented &nbsp;
+      <span class="badge gap">GAP</span> known limitation
+    </div>
+  </div>
+</section>
+{{TOC}}
+{{BODY}}
+<script src="../mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: "base", securityLevel: "loose",
+    themeVariables: { primaryColor: "#e8f0f8", primaryBorderColor: "#123e6b", primaryTextColor: "#1b2430",
+                      lineColor: "#3d4a5c", fontFamily: "Segoe UI, Arial", fontSize: "13px",
+                      secondaryColor: "#fdf0dc", tertiaryColor: "#f4f6f9" },
+    er: { useMaxWidth: true }, sequence: { useMaxWidth: true, mirrorActors: false, showSequenceNumbers: true },
+    flowchart: { useMaxWidth: true, htmlLabels: true }
+  });
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@ import org.example.enterprisedigitalbankingsystem.loan.entity.LoanStatus;
 import org.example.enterprisedigitalbankingsystem.loan.mapper.LoanMapper;
 import org.example.enterprisedigitalbankingsystem.loan.repository.LoanRepository;
 import org.example.enterprisedigitalbankingsystem.loan.service.LoanService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,6 +83,7 @@ public class LoanServiceImpl implements LoanService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public LoanResponse approveLoan(Long loanId) {
         Loan loan = findLoanById(loanId);
         if(loan.getStatus() != LoanStatus.PENDING){

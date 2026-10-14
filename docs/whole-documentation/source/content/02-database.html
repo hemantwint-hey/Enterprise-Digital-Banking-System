@@ -1,0 +1,553 @@
+<!-- title: Database Documentation | subtitle: ER diagram, relational schema, data dictionary, constraints, indexes and migration history for banking_db and notification_db. | out: 02-Database-Documentation.pdf -->
+
+<h2>1. Overview</h2>
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>RDBMS</td><td>MySQL 8.0 (InnoDB, utf8mb4)</td></tr>
+  <tr><td>Schemas</td><td><code>banking_db</code> (banking-app) &middot; <code>notification_db</code> (notification-service) &mdash; database-per-service, no cross-schema foreign keys</td></tr>
+  <tr><td>Connection</td><td><code>jdbc:mysql://localhost:3306/banking_db?createDatabaseIfNotExist=true</code>, user <code>${DB_USERNAME:root}</code>, password <code>${DB_PASSWORD}</code></td></tr>
+  <tr><td>ORM</td><td>Hibernate (Spring Data JPA). Today schema is managed by <code>spring.jpa.hibernate.ddl-auto=update</code>; Flyway + <code>validate</code> is <span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Naming</td><td>Spring&rsquo;s physical naming strategy: camelCase fields become snake_case columns (<code>tenureMonths</code> &rarr; <code>tenure_months</code>)</td></tr>
+  <tr><td>Conventions</td><td>Surrogate <code>BIGINT AUTO_INCREMENT</code> keys (UUID for <code>users</code>); money <code>DECIMAL(18,2)</code>; enums stored as <code>VARCHAR</code> names; timestamps <code>DATETIME(6)</code> set in <code>@PrePersist</code></td></tr>
+</table>
+
+<h3>1.1 Tables</h3>
+<table>
+  <tr><th>Table</th><th>Entity</th><th>Purpose</th><th>Status</th></tr>
+  <tr><td><code>users</code></td><td>User</td><td>Login identity, role, verification flags</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>customers</code></td><td>Customer</td><td>Personal profile and KYC of a user</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>accounts</code></td><td>Account</td><td>Savings / current accounts and balances</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>transactions</code></td><td>Transaction</td><td>Deposit / withdrawal / transfer headers</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>ledger_entries</code></td><td>LedgerEntry</td><td>Double-entry DEBIT/CREDIT lines per account</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>beneficiaries</code></td><td>Beneficiary</td><td>Saved payees of a customer</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>loans</code></td><td>Loan</td><td>Loan contracts</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>emis</code></td><td>Emi</td><td>Monthly installment schedule of a loan</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>audit_logs</code></td><td>AuditLog</td><td>Who-did-what trail</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>cards</code></td><td>Card</td><td>Debit / credit cards linked to accounts</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td><code>notification</code> (notification_db)</td><td>NotificationEntity</td><td>Notifications sent to users</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td><code>flyway_schema_history</code></td><td>&mdash;</td><td>Applied migrations</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h2>2. Entity Relationship Diagram</h2>
+<div class="figure">
+<pre class="mermaid">
+erDiagram
+  USERS ||--o| CUSTOMERS : "has profile"
+  USERS |o--o{ AUDIT_LOGS : "performed"
+  CUSTOMERS ||--o{ ACCOUNTS : "owns"
+  CUSTOMERS ||--o{ BENEFICIARIES : "saves"
+  ACCOUNTS ||--o{ BENEFICIARIES : "is payee in"
+  CUSTOMERS ||--o{ LOANS : "borrows"
+  ACCOUNTS ||--o{ LOANS : "receives disbursement"
+  LOANS ||--|{ EMIS : "repaid by"
+  ACCOUNTS |o--o{ TRANSACTIONS : "source of"
+  ACCOUNTS |o--o{ TRANSACTIONS : "destination of"
+  TRANSACTIONS ||--|{ LEDGER_ENTRIES : "posts"
+  ACCOUNTS ||--o{ LEDGER_ENTRIES : "has"
+  ACCOUNTS ||--o{ CARDS : "linked to (planned)"
+
+  USERS {
+    binary16 user_id PK
+    varchar full_name
+    varchar username UK
+    varchar email UK
+    varchar password
+    varchar phone_number UK
+    varchar role
+    varchar status
+    bit kyc_verified
+    bit email_verified
+    bit phone_verified
+    datetime last_login
+    datetime created_at
+    datetime updated_at
+  }
+  CUSTOMERS {
+    bigint id PK
+    binary16 user_id FK,UK
+    varchar first_name
+    varchar last_name
+    date date_of_birth
+    varchar phone_number UK
+    varchar address
+    varchar city
+    varchar state
+    varchar country
+    varchar postal_code
+    varchar kyc_status
+    varchar pan_number UK
+    varchar aadhaar_number UK
+    datetime created_at
+  }
+  ACCOUNTS {
+    bigint id PK
+    varchar account_number UK
+    bigint customer_id FK
+    varchar account_holder_name
+    varchar branch
+    decimal balance
+    varchar account_type
+    varchar account_status
+    datetime created_at
+    datetime updated_at
+    bigint version
+  }
+  TRANSACTIONS {
+    bigint id PK
+    varchar transaction_reference UK
+    bigint source_account_id FK
+    bigint destination_account_id FK
+    decimal amount
+    varchar transaction_type
+    varchar transaction_status
+    decimal balance_after_transaction
+    varchar remarks
+    datetime created_at
+  }
+  LEDGER_ENTRIES {
+    bigint id PK
+    bigint transaction_id FK
+    bigint account_id FK
+    varchar entry_type
+    decimal amount
+    decimal balance_after_entry
+    varchar narration
+    datetime created_at
+  }
+  BENEFICIARIES {
+    bigint id PK
+    bigint customer_id FK
+    bigint beneficiary_account_id FK
+    varchar nick_name
+    varchar status
+    datetime created_at
+  }
+  LOANS {
+    bigint id PK
+    bigint customer_id FK
+    bigint disbursement_account_id FK
+    varchar loan_type
+    decimal principal_amount
+    decimal interest_rate
+    int tenure_months
+    decimal emi_amount
+    varchar status
+    datetime created_at
+    datetime approved_at
+    datetime closed_at
+  }
+  EMIS {
+    bigint id PK
+    bigint loan_id FK
+    int installment_number
+    date due_date
+    decimal amount
+    varchar status
+    datetime paid_at
+  }
+  AUDIT_LOGS {
+    bigint id PK
+    binary16 performed_by FK
+    varchar action
+    varchar entity_name
+    varchar entity_id
+    longtext old_value
+    longtext new_value
+    varchar description
+    varchar ip_address
+    datetime created_at
+  }
+  CARDS {
+    bigint id PK
+    bigint account_id FK
+    varchar card_number_masked
+    varchar card_type
+    varchar status
+    date expiry_date
+  }
+</pre>
+<div class="cap">Figure 1 &mdash; banking_db ER diagram (crow&rsquo;s-foot). <code>CARDS</code> is planned.</div>
+</div>
+
+<h3>2.1 Relationship summary</h3>
+<table>
+  <tr><th>Relationship</th><th>Cardinality</th><th>FK column</th><th>JPA mapping</th></tr>
+  <tr><td>User &rarr; Customer</td><td>1 : 0..1</td><td><code>customers.user_id</code> (unique)</td><td><code>@OneToOne(LAZY)</code> on Customer</td></tr>
+  <tr><td>Customer &rarr; Account</td><td>1 : N</td><td><code>accounts.customer_id</code></td><td><code>@ManyToOne(LAZY)</code> on Account</td></tr>
+  <tr><td>Account &rarr; Transaction (source)</td><td>0..1 : N</td><td><code>transactions.source_account_id</code> (null for deposits)</td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Account &rarr; Transaction (destination)</td><td>0..1 : N</td><td><code>transactions.destination_account_id</code> (null for withdrawals)</td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Transaction &rarr; LedgerEntry</td><td>1 : 1..2</td><td><code>ledger_entries.transaction_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Account &rarr; LedgerEntry</td><td>1 : N</td><td><code>ledger_entries.account_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Customer &rarr; Beneficiary</td><td>1 : N</td><td><code>beneficiaries.customer_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Account &rarr; Beneficiary</td><td>1 : N</td><td><code>beneficiaries.beneficiary_account_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Customer &rarr; Loan</td><td>1 : N</td><td><code>loans.customer_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Account &rarr; Loan</td><td>1 : N</td><td><code>loans.disbursement_account_id</code></td><td><code>@ManyToOne(LAZY)</code></td></tr>
+  <tr><td>Loan &rarr; Emi</td><td>1 : 1..360</td><td><code>emis.loan_id</code></td><td><code>@ManyToOne(LAZY)</code> on Emi (no collection on Loan)</td></tr>
+  <tr><td>User &rarr; AuditLog</td><td>0..1 : N</td><td><code>audit_logs.performed_by</code> (null for anonymous / failed login)</td><td><code>@ManyToOne(LAZY)</code></td></tr>
+</table>
+
+<h3>2.2 notification_db</h3>
+<div class="figure">
+<pre class="mermaid">
+erDiagram
+  NOTIFICATION {
+    varchar36 notification_id PK
+    varchar64 user_id "banking users.user_id (logical ref)"
+    varchar255 title
+    varchar4000 content
+    varchar16 notification_type
+    varchar16 notification_priority
+    varchar16 notification_status
+    varchar128 idempotency_key UK
+    datetime created_at
+    datetime updated_at
+  }
+</pre>
+<div class="cap">Figure 2 &mdash; notification_db. <code>user_id</code> is a logical reference only (separate database, no FK).</div>
+</div>
+
+<h2>3. Relational Schema (DDL)</h2>
+<p>The DDL below is the schema Hibernate generates from the entities. It is the intended content of the Flyway baseline migration <code>V1__baseline.sql</code> <span class="badge planned">PLANNED</span>.</p>
+<pre class="code">CREATE TABLE users (
+  user_id         BINARY(16)   NOT NULL PRIMARY KEY,
+  full_name       VARCHAR(255) NOT NULL,
+  username        VARCHAR(255) NOT NULL UNIQUE,
+  email           VARCHAR(255) NOT NULL UNIQUE,
+  password        VARCHAR(255) NOT NULL,              -- BCrypt hash
+  phone_number    VARCHAR(255) NOT NULL UNIQUE,
+  role            VARCHAR(255) NOT NULL,              -- CUSTOMER|MANAGER|EMPLOYEE|ADMIN|AUDITOR
+  status          VARCHAR(255) NOT NULL,              -- ACTIVE|INACTIVE|BLOCKED|SUSPENDED
+  kyc_verified    BIT          NOT NULL,
+  email_verified  BIT          NOT NULL,
+  phone_verified  BIT          NOT NULL,
+  last_login      DATETIME(6),
+  created_at      DATETIME(6)  NOT NULL,
+  updated_at      DATETIME(6)
+);
+
+CREATE TABLE customers (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id         BINARY(16)   NOT NULL UNIQUE,
+  first_name      VARCHAR(255) NOT NULL,
+  last_name       VARCHAR(255) NOT NULL,
+  date_of_birth   DATE,
+  phone_number    VARCHAR(15)  NOT NULL UNIQUE,
+  address         VARCHAR(255) NOT NULL,
+  city            VARCHAR(255) NOT NULL,
+  state           VARCHAR(255) NOT NULL,
+  country         VARCHAR(255) NOT NULL,
+  postal_code     VARCHAR(255) NOT NULL,
+  kyc_status      VARCHAR(255) NOT NULL,              -- PENDING|IN_PROGRESS|VERIFIED|REJECTED
+  pan_number      VARCHAR(10)  UNIQUE,
+  aadhaar_number  VARCHAR(12)  UNIQUE,
+  created_at      DATETIME(6)  NOT NULL,
+  CONSTRAINT fk_customer_user FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+CREATE TABLE accounts (
+  id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  account_number       VARCHAR(255)   NOT NULL UNIQUE,  -- "10" + 10 digits
+  customer_id          BIGINT         NOT NULL,
+  account_holder_name  VARCHAR(255)   NOT NULL,
+  branch               VARCHAR(255)   NOT NULL,
+  balance              DECIMAL(18,2)  NOT NULL,
+  account_type         VARCHAR(255)   NOT NULL,       -- SAVINGS|CURRENT
+  account_status       VARCHAR(255)   NOT NULL,       -- ACTIVE|BLOCKED|FROZEN|CLOSED
+  created_at           DATETIME(6)    NOT NULL,
+  updated_at           DATETIME(6),
+  version              BIGINT,                        -- optimistic lock
+  CONSTRAINT fk_account_customer FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+
+CREATE TABLE transactions (
+  id                         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  transaction_reference      VARCHAR(255)  NOT NULL UNIQUE,  -- "TXN" + 13 digits
+  source_account_id          BIGINT,
+  destination_account_id     BIGINT,
+  amount                     DECIMAL(18,2) NOT NULL,
+  transaction_type           VARCHAR(255)  NOT NULL,   -- DEPOSIT|WITHDRAWAL|TRANSFER
+  transaction_status         VARCHAR(255)  NOT NULL,   -- PENDING|SUCCESS|FAILED|REVERSED
+  balance_after_transaction  DECIMAL(18,2) NOT NULL,
+  remarks                    VARCHAR(255),
+  created_at                 DATETIME(6)   NOT NULL,
+  CONSTRAINT fk_txn_source FOREIGN KEY (source_account_id)      REFERENCES accounts(id),
+  CONSTRAINT fk_txn_dest   FOREIGN KEY (destination_account_id) REFERENCES accounts(id)
+);
+
+CREATE TABLE ledger_entries (
+  id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  transaction_id       BIGINT        NOT NULL,
+  account_id           BIGINT        NOT NULL,
+  entry_type           VARCHAR(255)  NOT NULL,         -- DEBIT|CREDIT
+  amount               DECIMAL(18,2) NOT NULL,
+  balance_after_entry  DECIMAL(18,2) NOT NULL,
+  narration            VARCHAR(255),
+  created_at           DATETIME(6)   NOT NULL,
+  CONSTRAINT fk_ledger_txn     FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+  CONSTRAINT fk_ledger_account FOREIGN KEY (account_id)     REFERENCES accounts(id)
+);
+
+CREATE TABLE beneficiaries (
+  id                      BIGINT AUTO_INCREMENT PRIMARY KEY,
+  customer_id             BIGINT       NOT NULL,
+  beneficiary_account_id  BIGINT       NOT NULL,
+  nick_name               VARCHAR(255) NOT NULL,
+  status                  VARCHAR(255) NOT NULL,       -- PENDING|ACTIVE|BLOCKED
+  created_at              DATETIME(6)  NOT NULL,
+  CONSTRAINT fk_benef_customer FOREIGN KEY (customer_id)            REFERENCES customers(id),
+  CONSTRAINT fk_benef_account  FOREIGN KEY (beneficiary_account_id) REFERENCES accounts(id)
+);
+
+CREATE TABLE loans (
+  id                       BIGINT AUTO_INCREMENT PRIMARY KEY,
+  customer_id              BIGINT        NOT NULL,
+  disbursement_account_id  BIGINT        NOT NULL,
+  loan_type                VARCHAR(255)  NOT NULL,     -- PERSONAL|HOME|VEHICLE|EDUCATION
+  principal_amount         DECIMAL(18,2) NOT NULL,
+  interest_rate            DECIMAL(5,2)  NOT NULL,     -- annual %, e.g. 10.50
+  tenure_months            INT           NOT NULL,
+  emi_amount               DECIMAL(18,2) NOT NULL,
+  status                   VARCHAR(255)  NOT NULL,     -- PENDING|ACTIVE|REJECTED|CLOSED
+  created_at               DATETIME(6)   NOT NULL,
+  approved_at              DATETIME(6),
+  closed_at                DATETIME(6),
+  CONSTRAINT fk_loan_customer FOREIGN KEY (customer_id)             REFERENCES customers(id),
+  CONSTRAINT fk_loan_account  FOREIGN KEY (disbursement_account_id) REFERENCES accounts(id)
+);
+
+CREATE TABLE emis (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  loan_id             BIGINT        NOT NULL,
+  installment_number  INT           NOT NULL,
+  due_date            DATE          NOT NULL,
+  amount              DECIMAL(18,2) NOT NULL,
+  status              VARCHAR(255)  NOT NULL,          -- PENDING|PAID|OVERDUE
+  paid_at             DATETIME(6),
+  CONSTRAINT fk_emi_loan FOREIGN KEY (loan_id) REFERENCES loans(id)
+);
+
+CREATE TABLE audit_logs (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  performed_by  BINARY(16),
+  action        VARCHAR(255) NOT NULL,   -- CREATE|UPDATE|DELETE|LOGIN|LOGOUT|LOGIN_FAILED
+  entity_name   VARCHAR(255) NOT NULL,
+  entity_id     VARCHAR(255),
+  old_value     LONGTEXT,
+  new_value     LONGTEXT,
+  description   VARCHAR(255),
+  ip_address    VARCHAR(64),
+  created_at    DATETIME(6)  NOT NULL,
+  CONSTRAINT fk_audit_user FOREIGN KEY (performed_by) REFERENCES users(user_id)
+);</pre>
+
+<h2>4. Data Dictionary</h2>
+<p>Column-level reference. <b>Req</b> = NOT NULL. Validation refers to the request-DTO rules that guard the column at the API boundary.</p>
+
+<h3>4.1 users</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>user_id</td><td>UUID</td><td>PK</td><td>Generated by Hibernate (<code>GenerationType.UUID</code>)</td></tr>
+  <tr><td>full_name</td><td>varchar</td><td>Y</td><td>3&ndash;100 chars</td></tr>
+  <tr><td>username</td><td>varchar</td><td>Y, UK</td><td>3&ndash;50 chars</td></tr>
+  <tr><td>email</td><td>varchar</td><td>Y, UK</td><td>Valid e-mail; login identifier and JWT subject</td></tr>
+  <tr><td>password</td><td>varchar</td><td>Y</td><td>BCrypt hash (raw &ge; 8 chars); never returned or logged</td></tr>
+  <tr><td>phone_number</td><td>varchar</td><td>Y, UK</td><td>Indian mobile: <code>^[6-9]\d{9}$</code></td></tr>
+  <tr><td>role</td><td>enum</td><td>Y</td><td>Defaults to <code>CUSTOMER</code> on register</td></tr>
+  <tr><td>status</td><td>enum</td><td>Y</td><td>Defaults to <code>ACTIVE</code></td></tr>
+  <tr><td>kyc_verified</td><td>bool</td><td>Y</td><td>Set true when customer KYC is completed; false when customer deleted</td></tr>
+  <tr><td>email_verified / phone_verified</td><td>bool</td><td>Y</td><td>Always false today (verification flow <span class="badge planned">PLANNED</span>)</td></tr>
+  <tr><td>last_login</td><td>datetime</td><td>N</td><td>Not yet updated on login <span class="badge gap">GAP</span></td></tr>
+  <tr><td>created_at / updated_at</td><td>datetime</td><td>Y / N</td><td>Set by service on register</td></tr>
+</table>
+
+<h3>4.2 customers</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>id</td><td>bigint</td><td>PK</td><td>Auto-increment</td></tr>
+  <tr><td>user_id</td><td>UUID</td><td>Y, UK, FK</td><td>One customer profile per user; resolved from request <code>email</code></td></tr>
+  <tr><td>first_name / last_name</td><td>varchar</td><td>Y</td><td>3&ndash;50 chars on create, 2&ndash;50 on update</td></tr>
+  <tr><td>date_of_birth</td><td>date</td><td>N (API: required)</td><td>ISO <code>yyyy-MM-dd</code></td></tr>
+  <tr><td>phone_number</td><td>varchar(15)</td><td>Y, UK</td><td><code>^[6-9]\d{9}$</code>; uniqueness also checked in service</td></tr>
+  <tr><td>address</td><td>varchar</td><td>Y</td><td>&le; 255</td></tr>
+  <tr><td>city / state / country</td><td>varchar</td><td>Y</td><td>&le; 100 each</td></tr>
+  <tr><td>postal_code</td><td>varchar</td><td>Y</td><td>6 digits: <code>^\d{6}$</code></td></tr>
+  <tr><td>kyc_status</td><td>enum</td><td>Y</td><td>PENDING on create &rarr; VERIFIED on KYC completion</td></tr>
+  <tr><td>pan_number</td><td>varchar(10)</td><td>N, UK</td><td><code>^[A-Z]{5}[0-9]{4}[A-Z]$</code> <b>(sensitive)</b></td></tr>
+  <tr><td>aadhaar_number</td><td>varchar(12)</td><td>N, UK</td><td><code>^\d{12}$</code> <b>(sensitive)</b></td></tr>
+  <tr><td>created_at</td><td>datetime</td><td>Y</td><td><code>@PrePersist</code></td></tr>
+</table>
+
+<h3>4.3 accounts</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>id</td><td>bigint</td><td>PK</td><td>Auto-increment</td></tr>
+  <tr><td>account_number</td><td>varchar</td><td>Y, UK</td><td>System-generated: <code>"10"</code> + 10 random digits (SecureRandom), regenerated on collision</td></tr>
+  <tr><td>customer_id</td><td>bigint</td><td>Y, FK</td><td>Owner</td></tr>
+  <tr><td>account_holder_name</td><td>varchar</td><td>Y</td><td>Copied from customer first + last name</td></tr>
+  <tr><td>branch</td><td>varchar</td><td>Y</td><td>&le; 100 chars</td></tr>
+  <tr><td>balance</td><td>decimal(18,2)</td><td>Y</td><td>Opening balance &ge; 0; never negative (withdraw/transfer check)</td></tr>
+  <tr><td>account_type</td><td>enum</td><td>Y</td><td>SAVINGS | CURRENT</td></tr>
+  <tr><td>account_status</td><td>enum</td><td>Y</td><td>ACTIVE default; only ACTIVE accounts can transact</td></tr>
+  <tr><td>created_at / updated_at</td><td>datetime</td><td>Y / N</td><td><code>@PrePersist</code> / <code>@PreUpdate</code></td></tr>
+  <tr><td>version</td><td>bigint</td><td>N</td><td>JPA <code>@Version</code> &mdash; optimistic locking</td></tr>
+</table>
+
+<h3>4.4 transactions</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>id</td><td>bigint</td><td>PK</td><td></td></tr>
+  <tr><td>transaction_reference</td><td>varchar</td><td>Y, UK, immutable</td><td><code>"TXN"</code> + 13 digits</td></tr>
+  <tr><td>source_account_id</td><td>bigint</td><td>N, FK</td><td>Set for WITHDRAWAL and TRANSFER</td></tr>
+  <tr><td>destination_account_id</td><td>bigint</td><td>N, FK</td><td>Set for DEPOSIT and TRANSFER</td></tr>
+  <tr><td>amount</td><td>decimal(18,2)</td><td>Y</td><td>&ge; 1.00</td></tr>
+  <tr><td>transaction_type</td><td>enum</td><td>Y</td><td>DEPOSIT | WITHDRAWAL | TRANSFER</td></tr>
+  <tr><td>transaction_status</td><td>enum</td><td>Y</td><td>Written as SUCCESS (failures roll back, nothing stored); FAILED / REVERSED reserved</td></tr>
+  <tr><td>balance_after_transaction</td><td>decimal(18,2)</td><td>Y</td><td>Account balance after posting (source balance for transfers)</td></tr>
+  <tr><td>remarks</td><td>varchar(255)</td><td>N</td><td>Free text from client</td></tr>
+  <tr><td>created_at</td><td>datetime</td><td>Y</td><td>Immutable</td></tr>
+</table>
+
+<h3>4.5 ledger_entries</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>transaction_id</td><td>bigint</td><td>Y, FK</td><td>Parent transaction</td></tr>
+  <tr><td>account_id</td><td>bigint</td><td>Y, FK</td><td>Account whose balance moved</td></tr>
+  <tr><td>entry_type</td><td>enum</td><td>Y</td><td>DEBIT (money out) | CREDIT (money in)</td></tr>
+  <tr><td>amount</td><td>decimal(18,2)</td><td>Y</td><td>Always positive</td></tr>
+  <tr><td>balance_after_entry</td><td>decimal(18,2)</td><td>Y</td><td>Running balance &mdash; statement line</td></tr>
+  <tr><td>narration</td><td>varchar(255)</td><td>N</td><td>Remarks, or <code>"&lt;TYPE&gt; &lt;reference&gt;"</code></td></tr>
+</table>
+
+<h3>4.6 beneficiaries</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>customer_id</td><td>bigint</td><td>Y, FK</td><td>Owner of the payee list</td></tr>
+  <tr><td>beneficiary_account_id</td><td>bigint</td><td>Y, FK</td><td>Payee account; (customer_id, beneficiary_account_id) must be unique (service check)</td></tr>
+  <tr><td>nick_name</td><td>varchar</td><td>Y</td><td>&le; 100 chars</td></tr>
+  <tr><td>status</td><td>enum</td><td>Y</td><td>PENDING on add &rarr; ACTIVE on activation; only ACTIVE can receive transfers</td></tr>
+</table>
+
+<h3>4.7 loans and emis</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>loans.loan_type</td><td>enum</td><td>Y</td><td>PERSONAL | HOME | VEHICLE | EDUCATION</td></tr>
+  <tr><td>loans.principal_amount</td><td>decimal(18,2)</td><td>Y</td><td>&ge; 1000.00</td></tr>
+  <tr><td>loans.interest_rate</td><td>decimal(5,2)</td><td>Y</td><td>Annual %, &ge; 0.01</td></tr>
+  <tr><td>loans.tenure_months</td><td>int</td><td>Y</td><td>1&ndash;360</td></tr>
+  <tr><td>loans.emi_amount</td><td>decimal(18,2)</td><td>Y</td><td>Computed at application: <code>P&middot;r&middot;(1+r)^n / ((1+r)^n &minus; 1)</code>, r = rate/12/100, HALF_UP to 2 dp</td></tr>
+  <tr><td>loans.status</td><td>enum</td><td>Y</td><td>PENDING &rarr; ACTIVE / REJECTED; ACTIVE &rarr; CLOSED</td></tr>
+  <tr><td>loans.approved_at / closed_at</td><td>datetime</td><td>N</td><td>Set on approve / last EMI paid</td></tr>
+  <tr><td>emis.installment_number</td><td>int</td><td>Y</td><td>1..tenure_months</td></tr>
+  <tr><td>emis.due_date</td><td>date</td><td>Y</td><td>Approval date + n months</td></tr>
+  <tr><td>emis.amount</td><td>decimal(18,2)</td><td>Y</td><td>= loans.emi_amount</td></tr>
+  <tr><td>emis.status</td><td>enum</td><td>Y</td><td>PENDING &rarr; PAID; OVERDUE via scheduled job <span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>emis.paid_at</td><td>datetime</td><td>N</td><td>Set on payment</td></tr>
+</table>
+
+<h3>4.8 audit_logs</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Req</th><th>Description / rules</th></tr>
+  <tr><td>performed_by</td><td>UUID</td><td>N, FK</td><td>Authenticated user from SecurityContext; null for anonymous events</td></tr>
+  <tr><td>action</td><td>enum</td><td>Y</td><td>CREATE | UPDATE | DELETE | LOGIN | LOGOUT | LOGIN_FAILED</td></tr>
+  <tr><td>entity_name / entity_id</td><td>varchar</td><td>Y / N</td><td>e.g. <code>"Account"</code>, <code>"42"</code></td></tr>
+  <tr><td>old_value / new_value</td><td>LONGTEXT</td><td>N</td><td>Short <code>key=value</code> snapshots; never contain passwords</td></tr>
+  <tr><td>description</td><td>varchar(255)</td><td>N</td><td>Human readable, e.g. &ldquo;Account frozen&rdquo;</td></tr>
+  <tr><td>ip_address</td><td>varchar(64)</td><td>N</td><td>Client IP (first <code>X-Forwarded-For</code> value or remote address)</td></tr>
+</table>
+
+<h3>4.9 Enumerations</h3>
+<table>
+  <tr><th>Enum</th><th>Values</th></tr>
+  <tr><td>Role</td><td>CUSTOMER, MANAGER, EMPLOYEE, ADMIN, AUDITOR</td></tr>
+  <tr><td>UserStatus</td><td>ACTIVE, INACTIVE, BLOCKED, SUSPENDED</td></tr>
+  <tr><td>KYCStatus</td><td>PENDING, IN_PROGRESS, VERIFIED, REJECTED</td></tr>
+  <tr><td>AccountType</td><td>SAVINGS, CURRENT</td></tr>
+  <tr><td>AccountStatus</td><td>ACTIVE, BLOCKED, FROZEN, CLOSED</td></tr>
+  <tr><td>TransactionType</td><td>DEPOSIT, WITHDRAWAL, TRANSFER</td></tr>
+  <tr><td>TransactionStatus</td><td>PENDING, SUCCESS, FAILED, REVERSED</td></tr>
+  <tr><td>EntryType</td><td>DEBIT, CREDIT</td></tr>
+  <tr><td>BeneficiaryStatus</td><td>ACTIVE, BLOCKED, PENDING</td></tr>
+  <tr><td>LoanType</td><td>PERSONAL, HOME, VEHICLE, EDUCATION</td></tr>
+  <tr><td>LoanStatus</td><td>ACTIVE, PENDING, REJECTED, CLOSED</td></tr>
+  <tr><td>EmiStatus</td><td>PENDING, PAID, OVERDUE</td></tr>
+  <tr><td>AuditAction</td><td>CREATE, UPDATE, DELETE, LOGIN, LOGOUT, LOGIN_FAILED</td></tr>
+  <tr><td>NotificationType / Priority / Status</td><td>EMAIL, SMS, PUSH, IN_APP &middot; LOW, MEDIUM, HIGH &middot; CREATED, QUEUED, PROCESSING, SENT, FAILED, RETRYING</td></tr>
+</table>
+
+<h2>5. Constraints and Integrity Rules</h2>
+<h3>5.1 Database-enforced</h3>
+<table>
+  <tr><th>Type</th><th>Constraint</th></tr>
+  <tr><td>Primary keys</td><td>All tables (UUID for users, identity BIGINT elsewhere, VARCHAR(36) for notification)</td></tr>
+  <tr><td>Unique</td><td>users.username, users.email, users.phone_number, customers.user_id, customers.phone_number, customers.pan_number, customers.aadhaar_number, accounts.account_number, transactions.transaction_reference, notification.idempotency_key</td></tr>
+  <tr><td>Foreign keys</td><td>All 13 relationships in section 2.1 (no <code>ON DELETE CASCADE</code>; deleting a parent with children fails)</td></tr>
+  <tr><td>NOT NULL</td><td>As per DDL in section 3</td></tr>
+  <tr><td>Optimistic lock</td><td>accounts.version incremented on every update</td></tr>
+</table>
+
+<h3>5.2 Application-enforced (service layer)</h3>
+<ul>
+  <li>Balance never goes negative: withdraw/transfer fail with <i>insufficient balance</i>.</li>
+  <li>Only <code>ACTIVE</code> accounts can be source or destination of a transaction.</li>
+  <li>A transfer cannot have the same source and destination; exactly one of <code>destinationAccountId</code> / <code>beneficiaryId</code> must be given.</li>
+  <li>Transfers via beneficiary require status ACTIVE and the beneficiary must belong to the source account&rsquo;s customer.</li>
+  <li>An account must have zero balance to be closed; a CLOSED account cannot be modified.</li>
+  <li>A customer cannot add the same account as a beneficiary twice.</li>
+  <li>A loan can be approved or rejected only while PENDING; an EMI cannot be paid twice.</li>
+  <li>PAN / Aadhaar / phone may not be linked to another customer.</li>
+  <li>Double-entry invariant: for every TRANSFER, &Sigma; DEBIT = &Sigma; CREDIT (verified by <code>AccountingLogicTest</code>).</li>
+</ul>
+
+<h2>6. Indexes</h2>
+<table>
+  <tr><th>Index</th><th>Table(columns)</th><th>Source</th><th>Serves</th><th>Status</th></tr>
+  <tr><td>PRIMARY</td><td>every table (id)</td><td>PK</td><td>findById</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>UK_* (auto)</td><td>all unique columns listed in 5.1</td><td><code>unique = true</code></td><td>findByEmail, findByAccountNumber, findByTransactionReference, findByPanNumber &hellip;</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FK_* (auto)</td><td>every FK column</td><td>InnoDB creates an index for each FK</td><td>findByCustomerId, findByLoanId&hellip;, findByAccountId&hellip;</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>idx_txn_source</td><td>transactions(source_account_id)</td><td>V2__indexes.sql</td><td>Transaction history</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>idx_txn_dest</td><td>transactions(destination_account_id)</td><td>V2__indexes.sql</td><td>Transaction history</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>idx_ledger_account_created</td><td>ledger_entries(account_id, created_at)</td><td>V2__indexes.sql</td><td>Ledger by account ordered by date</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>idx_audit_entity</td><td>audit_logs(entity_name, entity_id, created_at)</td><td>V2__indexes.sql</td><td>Audit by entity</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>idx_emi_loan_installment</td><td>emis(loan_id, installment_number)</td><td>V2__indexes.sql</td><td>EMI schedule ordered</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>idx_notification_user_id</td><td>notification(user_id)</td><td>@Index</td><td>getByUserId</td><td><span class="badge built">BUILT</span></td></tr>
+</table>
+<pre class="code">-- V2__indexes.sql (planned)
+CREATE INDEX idx_txn_source            ON transactions(source_account_id);
+CREATE INDEX idx_txn_dest              ON transactions(destination_account_id);
+CREATE INDEX idx_ledger_account_created ON ledger_entries(account_id, created_at);
+CREATE INDEX idx_audit_entity          ON audit_logs(entity_name, entity_id, created_at);
+CREATE INDEX idx_emi_loan_installment  ON emis(loan_id, installment_number);</pre>
+
+<h2>7. Migration History</h2>
+<h3>7.1 Schema evolution so far (Hibernate <code>ddl-auto=update</code>)</h3>
+<table>
+  <tr><th>Stage</th><th>Change</th><th>Tables affected</th></tr>
+  <tr><td>1</td><td>Authentication: User entity with UUID key, roles, status</td><td>users</td></tr>
+  <tr><td>2</td><td>Customer profile + KYC fields</td><td>customers</td></tr>
+  <tr><td>3</td><td>Accounts with generated numbers, <code>@Version</code> optimistic locking</td><td>accounts</td></tr>
+  <tr><td>4</td><td>Transactions (deposit, withdraw, transfer)</td><td>transactions</td></tr>
+  <tr><td>5</td><td>Double-entry ledger</td><td>ledger_entries</td></tr>
+  <tr><td>6</td><td>Audit logging</td><td>audit_logs</td></tr>
+  <tr><td>7</td><td>Beneficiaries (+ transfer via beneficiary)</td><td>beneficiaries</td></tr>
+  <tr><td>8</td><td>Embedded notification module removed &mdash; moved to notification-service</td><td>(notification tables moved to notification_db)</td></tr>
+  <tr><td>9</td><td>Loans and EMI schedule</td><td>loans, emis</td></tr>
+</table>
+
+<h3>7.2 Flyway plan <span class="badge planned">PLANNED</span></h3>
+<table>
+  <tr><th>Version</th><th>File</th><th>Content</th></tr>
+  <tr><td>V1</td><td><code>V1__baseline.sql</code></td><td>Full schema of section 3 (captured with <code>mysqldump --no-data banking_db</code>)</td></tr>
+  <tr><td>V2</td><td><code>V2__indexes.sql</code></td><td>Indexes from section 6</td></tr>
+  <tr><td>V3</td><td><code>V3__cards.sql</code></td><td><code>cards</code> table when the Card module is implemented</td></tr>
+  <tr><td>V4+</td><td><code>V&lt;n&gt;__&lt;description&gt;.sql</code></td><td>Every future schema change; never edit an applied migration</td></tr>
+</table>
+<div class="note">Procedure: add <code>flyway-mysql</code>, place files in <code>src/main/resources/db/migration</code>, set <code>spring.jpa.hibernate.ddl-auto=validate</code> (prod profile). On an existing database use <code>spring.flyway.baseline-on-migrate=true</code> so V1 is marked as applied rather than re-run.</div>
+
+<h2>8. Data Retention and Backup</h2>
+<table>
+  <tr><th>Data</th><th>Policy</th></tr>
+  <tr><td>transactions, ledger_entries</td><td>Append-only; never updated or deleted (financial record). Corrections are new reversing transactions (REVERSED status reserved).</td></tr>
+  <tr><td>audit_logs</td><td>Append-only; retain &ge; 8 years for compliance; read access for AUDITOR / ADMIN only (planned).</td></tr>
+  <tr><td>customers</td><td>Hard delete exists today (<code>DELETE /customers/{id}</code>); fails if accounts reference the customer. Soft delete is recommended <span class="badge planned">PLANNED</span>.</td></tr>
+  <tr><td>Backups</td><td>See document 07, section &ldquo;Backup and recovery&rdquo;.</td></tr>
+</table>

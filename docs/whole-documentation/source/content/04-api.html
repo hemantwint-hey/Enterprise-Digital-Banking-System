@@ -1,0 +1,406 @@
+<!-- title: API Documentation | subtitle: Authentication, conventions, full endpoint reference with request/response examples, error codes and the OpenAPI/Swagger setup. | out: 04-API-Documentation.pdf -->
+
+<h2>1. Conventions</h2>
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Base URL (local)</td><td><code>http://localhost:8080</code> &middot; behind Nginx: <code>https://&lt;host&gt;</code> <span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Versioning</td><td>URI versioning: <code>/api/v1/...</code>. Auth endpoints are unversioned: <code>/auth/...</code></td></tr>
+  <tr><td>Format</td><td>JSON request and response bodies, <code>Content-Type: application/json</code></td></tr>
+  <tr><td>Authentication</td><td><code>Authorization: Bearer &lt;JWT&gt;</code> on every endpoint except <code>/auth/**</code> (and Swagger UI once added)</td></tr>
+  <tr><td>Money</td><td>Decimal numbers with 2 fraction digits, e.g. <code>2500.00</code></td></tr>
+  <tr><td>Dates</td><td><code>LocalDate</code> &rarr; <code>"2026-10-13"</code>; <code>LocalDateTime</code> &rarr; <code>"2026-10-13T20:15:42.123456"</code> (server local time)</td></tr>
+  <tr><td>IDs</td><td>Numeric <code>Long</code> for all resources except users (<code>UUID</code>)</td></tr>
+  <tr><td>Enums</td><td>Sent and returned as upper-case names, e.g. <code>"SAVINGS"</code></td></tr>
+  <tr><td>Methods</td><td><span class="m GET">GET</span> read &middot; <span class="m POST">POST</span> create / action &middot; <span class="m PUT">PUT</span> full update &middot; <span class="m PATCH">PATCH</span> state change &middot; <span class="m DELETE">DELETE</span> remove</td></tr>
+  <tr><td>Lists</td><td>Return JSON arrays today; paged <code>Page&lt;T&gt;</code> with <code>?page=&amp;size=&amp;sort=</code> is <span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h3>1.1 Endpoint summary</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Purpose</th><th>Success</th></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/register</code></td><td>Register user</td><td>201</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/auth/login</code></td><td>Log in, get JWT</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/customers</code></td><td>Create customer profile</td><td>201</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/customers</code></td><td>List customers</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/customers/{customerId}</code></td><td>Get customer</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/customers/user/{userId}</code></td><td>Get customer by user UUID</td><td>200</td></tr>
+  <tr><td><span class="m PUT">PUT</span></td><td><code>/api/v1/customers/{customerId}</code></td><td>Update customer</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/customers/{customerId}/kyc</code></td><td>Complete KYC</td><td>200</td></tr>
+  <tr><td><span class="m DELETE">DELETE</span></td><td><code>/api/v1/customers/{customerId}</code></td><td>Delete customer</td><td>204</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/customers/search?name=</code></td><td>Search by name <span class="badge planned">PLANNED</span></td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/accounts</code></td><td>Open account</td><td>201</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/accounts/{accountId}</code></td><td>Get account</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/accounts/number/{accountNumber}</code></td><td>Get by account number</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/accounts/customer/{customerId}</code></td><td>Accounts of customer</td><td>200</td></tr>
+  <tr><td><span class="m PUT">PUT</span></td><td><code>/api/v1/accounts/{accountId}</code></td><td>Update branch / type</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/accounts/{accountId}/freeze</code></td><td>Freeze account</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/accounts/{accountId}/close</code></td><td>Close account</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/transactions/deposit</code></td><td>Deposit</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/transactions/withdraw</code></td><td>Withdraw</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/transactions/transfer</code></td><td>Transfer</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/transactions/{transactionId}</code></td><td>Get transaction</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/transactions/reference/{ref}</code></td><td>Get by reference</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/transactions/account/{accountId}/history</code></td><td>Account history</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/ledger/account/{accountId}</code></td><td>Ledger of account</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/ledger/transaction/{transactionId}</code></td><td>Ledger lines of transaction</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/beneficiaries</code></td><td>Add beneficiary</td><td>201</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/beneficiaries/{beneficiaryId}</code></td><td>Get beneficiary</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/beneficiaries/customer/{customerId}</code></td><td>Beneficiaries of customer</td><td>200</td></tr>
+  <tr><td><span class="m PUT">PUT</span></td><td><code>/api/v1/beneficiaries/{beneficiaryId}</code></td><td>Rename</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/beneficiaries/{beneficiaryId}/activate</code></td><td>Activate</td><td>200</td></tr>
+  <tr><td><span class="m DELETE">DELETE</span></td><td><code>/api/v1/beneficiaries/{beneficiaryId}</code></td><td>Remove</td><td>204</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>/api/v1/loans</code></td><td>Apply for loan</td><td>201</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/loans/{loanId}</code></td><td>Get loan</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/loans/customer/{customerId}</code></td><td>Loans of customer</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/loans/{loanId}/approve</code></td><td>Approve + disburse</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/loans/{loanId}/reject</code></td><td>Reject</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/emis/loan/{loanId}</code></td><td>EMI schedule</td><td>200</td></tr>
+  <tr><td><span class="m PATCH">PATCH</span></td><td><code>/api/v1/emis/{emiId}/pay</code></td><td>Pay EMI</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/audit</code></td><td>All audit logs</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/audit/entity/{entityName}/{entityId}</code></td><td>Audit of one entity</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>/api/v1/audit/user/{userId}</code></td><td>Audit by actor</td><td>200</td></tr>
+  <tr><td><span class="m POST">POST</span></td><td><code>:8081/api/v1/notifications</code></td><td>Send notification (notification-service)</td><td>201</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>:8081/api/v1/notifications/{id}</code></td><td>Get notification</td><td>200</td></tr>
+  <tr><td><span class="m GET">GET</span></td><td><code>:8081/api/v1/notifications?userId=</code></td><td>Notifications of user</td><td>200</td></tr>
+</table>
+
+<h2>2. Authentication</h2>
+<h3>2.1 Flow</h3>
+<ol>
+  <li><code>POST /auth/register</code> once to create a user (role <code>CUSTOMER</code>).</li>
+  <li><code>POST /auth/login</code> with e-mail + password &rarr; response contains <code>token</code>.</li>
+  <li>Send <code>Authorization: Bearer &lt;token&gt;</code> on every <code>/api/v1/**</code> call. Tokens expire after <code>jwt.expiration</code> (default 24 h); log in again afterwards.</li>
+  <li>Missing / invalid / expired token &rarr; <code>401</code> with the standard error body.</li>
+</ol>
+
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/auth/register</span> &nbsp; <span class="small">public</span></p>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Rules</th></tr>
+  <tr><td>fullName</td><td>string</td><td>required, 3&ndash;100</td></tr>
+  <tr><td>username</td><td>string</td><td>required, 3&ndash;50</td></tr>
+  <tr><td>email</td><td>string</td><td>required, e-mail format, unique</td></tr>
+  <tr><td>phoneNumber</td><td>string</td><td>required, <code>^[6-9]\d{9}$</code></td></tr>
+  <tr><td>password</td><td>string</td><td>required, &ge; 8</td></tr>
+  <tr><td>confirmPassword</td><td>string</td><td>required, must equal password</td></tr>
+</table>
+<pre class="code">// Request
+{ "fullName": "Hemant Mahto", "username": "hemant", "email": "hemant@example.com",
+  "phoneNumber": "9876543210", "password": "Secret@123", "confirmPassword": "Secret@123" }
+// 201 Created
+{ "success": true, "message": "User Registered Successfully" }</pre>
+<p>Errors: <code>400</code> validation &middot; <code>409</code> &ldquo;Email already exists&rdquo; &middot; <code>401</code> &ldquo;Password do not match&rdquo;</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/auth/login</span> &nbsp; <span class="small">public</span></p>
+<pre class="code">// Request
+{ "email": "hemant@example.com", "password": "Secret@123" }
+// 200 OK
+{ "success": true, "message": "Login successful",
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoZW1hbnRAZXhhbXBsZS5jb20iLCJpYXQiOjE3...signature" }</pre>
+<p>Errors: <code>400</code> validation &middot; <code>404</code> &ldquo;Invalid email id&rdquo; &middot; <code>401</code> &ldquo;Password didnt match&rdquo;</p>
+</div>
+
+<h3>2.2 Planned auth endpoints <span class="badge planned">PLANNED</span></h3>
+<table>
+  <tr><th>Endpoint</th><th>Body (DTO already exists)</th><th>Purpose</th></tr>
+  <tr><td><code>POST /auth/refresh</code></td><td><code>RefreshTokenRequest {refreshToken}</code></td><td>Exchange refresh token for a new short-lived access token</td></tr>
+  <tr><td><code>POST /auth/forgot-password</code></td><td><code>ForgotPasswordRequest {email}</code></td><td>E-mail a one-time reset token</td></tr>
+  <tr><td><code>POST /auth/reset-password</code></td><td><code>ResetPasswordRequest {token, newPassword, confirmPassword}</code></td><td>Set a new password with the reset token</td></tr>
+  <tr><td><code>POST /auth/change-password</code></td><td><code>ChangePassowordRequest {currentPassword, newPassword, confirmPassword}</code></td><td>Authenticated password change</td></tr>
+  <tr><td><code>POST /auth/logout</code></td><td>&mdash;</td><td>Revoke refresh token; audit LOGOUT</td></tr>
+</table>
+
+<h2>3. Customers</h2>
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/customers</span> &mdash; create the customer profile for an existing user</p>
+<table>
+  <tr><th>Field</th><th>Rules</th></tr>
+  <tr><td>firstName, lastName</td><td>required, 3&ndash;50</td></tr>
+  <tr><td>dateOfBirth</td><td>required, <code>yyyy-MM-dd</code></td></tr>
+  <tr><td>phoneNumber</td><td>required, <code>^[6-9]\d{9}$</code>, unique</td></tr>
+  <tr><td>address</td><td>required, &le; 255</td></tr>
+  <tr><td>city, state, country</td><td>required, &le; 100</td></tr>
+  <tr><td>postalCode</td><td>required, <code>^\d{6}$</code></td></tr>
+  <tr><td>email</td><td>required &mdash; e-mail of the registered user to link</td></tr>
+</table>
+<pre class="code">// Request
+{ "firstName": "Hemant", "lastName": "Mahto", "dateOfBirth": "2000-05-14", "phoneNumber": "9876543210",
+  "address": "12 MG Road", "city": "Ranchi", "state": "Jharkhand", "country": "India",
+  "postalCode": "834001", "email": "hemant@example.com" }
+// 201 Created  (CustomerResponse)
+{ "customerId": 1, "firstName": "Hemant", "lastName": "Mahto", "dateOfBirth": "2000-05-14",
+  "phoneNumber": "9876543210", "address": "12 MG Road", "city": "Ranchi", "state": "Jharkhand",
+  "country": "India", "postalCode": "834001", "kycStatus": "PENDING",
+  "createdAt": "2026-10-13T20:10:11.402" }</pre>
+<p>Errors: <code>404</code> user not found for e-mail &middot; <code>409</code> profile already exists / phone already used</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/customers/{customerId}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/customers/user/{userId}</span></p>
+<p>Return <code>CustomerResponse</code> (shape above). <code>404</code> when not found.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/customers</span> &mdash; list (<code>CustomerSummaryResponse[]</code>)</p>
+<pre class="code">[ { "customerId": 1, "firstName": "Hemant", "lastName": "Mahto", "phoneNumber": "9876543210",
+    "city": "Ranchi", "kycStatus": "VERIFIED" } ]</pre>
+</div>
+
+<div class="endpoint">
+<p><span class="m PUT">PUT</span> <span class="path">/api/v1/customers/{customerId}</span> &mdash; full update</p>
+<p>Body: same fields as create except <code>email</code>; names 2&ndash;50. <code>409</code> if the phone belongs to another customer.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/customers/{customerId}/kyc</span> &mdash; complete KYC</p>
+<pre class="code">// Request
+{ "panNumber": "ABCDE1234F", "aadhaarNumber": "123412341234" }
+// 200 OK -> CustomerResponse with "kycStatus": "VERIFIED"</pre>
+<p>Rules: PAN <code>^[A-Z]{5}[0-9]{4}[A-Z]$</code>, Aadhaar <code>^\d{12}$</code>; <code>409</code> if linked to another customer. Side effect: <code>users.kyc_verified = true</code>.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m DELETE">DELETE</span> <span class="path">/api/v1/customers/{customerId}</span> &rarr; <code>204 No Content</code></p>
+<p>Resets the user&rsquo;s <code>kycVerified</code>. Fails (500, FK violation) if the customer still has accounts/loans <span class="badge gap">GAP</span>.</p>
+</div>
+
+<h2>4. Accounts</h2>
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/accounts</span></p>
+<pre class="code">// Request
+{ "customerId": 1, "accountType": "SAVINGS", "branch": "Ranchi Main", "openingBalance": 5000.00 }
+// 201 Created (AccountResponse)
+{ "accountId": 1, "accountNumber": "100483920175", "customerId": 1, "customerName": "Hemant Mahto",
+  "accountHolderName": "Hemant Mahto", "branch": "Ranchi Main", "balance": 5000.00,
+  "accountType": "SAVINGS", "accountStatus": "ACTIVE",
+  "createdAt": "2026-10-13T20:12:00.1", "updatedAt": "2026-10-13T20:12:00.1" }</pre>
+<p>Rules: <code>customerId</code>, <code>accountType</code> required; <code>branch</code> &le; 100; <code>openingBalance</code> &ge; 0. Audit: CREATE.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/accounts/{accountId}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/accounts/number/{accountNumber}</span> &rarr; AccountResponse &nbsp;(cached in Redis <span class="badge planned">PLANNED</span>)</p>
+<p><span class="m GET">GET</span> <span class="path">/api/v1/accounts/customer/{customerId}</span> &rarr; <code>AccountSummaryResponse[]</code></p>
+<pre class="code">[ { "accountId": 1, "accountNumber": "100483920175", "accountHolderName": "Hemant Mahto",
+    "balance": 5000.00, "accountType": "SAVINGS", "accountStatus": "ACTIVE" } ]</pre>
+</div>
+
+<div class="endpoint">
+<p><span class="m PUT">PUT</span> <span class="path">/api/v1/accounts/{accountId}</span> &mdash; <code>{ "branch": "Ranchi East", "accountType": "CURRENT" }</code></p>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/accounts/{accountId}/freeze</span> &mdash; <code>{ "reason": "Suspicious activity" }</code> (required, &le; 255)</p>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/accounts/{accountId}/close</span> &mdash; <code>{ "reason": "Customer request" }</code></p>
+<p>Errors: <code>400</code> &ldquo;Closed account cannot be modified&rdquo;, &ldquo;Account is already frozen&rdquo;, &ldquo;Account balance must be zero before closing&rdquo;; <code>404</code> not found. Audit: UPDATE with old/new status.</p>
+</div>
+
+<h2>5. Transactions and Ledger</h2>
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/transactions/deposit</span> &middot; <span class="m POST">POST</span> <span class="path">/api/v1/transactions/withdraw</span></p>
+<pre class="code">// Request
+{ "accountId": 1, "amount": 2500.00, "remarks": "Salary" }
+// 200 OK (TransactionResponse) - deposit
+{ "transactionId": 10, "transactionReference": "TXN0004829301746",
+  "sourceAccountId": null, "sourceAccountNumber": null,
+  "destinationAccountId": 1, "destinationAccountNumber": "100483920175",
+  "amount": 2500.00, "transactionType": "DEPOSIT", "transactionStatus": "SUCCESS",
+  "balanceAfterTransaction": 7500.00, "remarks": "Salary", "createdAt": "2026-10-13T20:15:42.12" }</pre>
+<p>Rules: <code>amount</code> &ge; 1.00, <code>remarks</code> &le; 255; account must be ACTIVE; withdraw requires sufficient balance. Errors: <code>400</code>, <code>404</code>.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/transactions/transfer</span></p>
+<pre class="code">// To an account
+{ "sourceAccountId": 1, "destinationAccountId": 2, "amount": 1000.00, "remarks": "Rent" }
+// Or to a saved beneficiary (exactly one of destinationAccountId / beneficiaryId)
+{ "sourceAccountId": 1, "beneficiaryId": 3, "amount": 1000.00 }
+// 200 OK
+{ "transactionId": 11, "transactionReference": "TXN0918273645012", "sourceAccountId": 1,
+  "sourceAccountNumber": "100483920175", "destinationAccountId": 2,
+  "destinationAccountNumber": "100920384756", "amount": 1000.00, "transactionType": "TRANSFER",
+  "transactionStatus": "SUCCESS", "balanceAfterTransaction": 6500.00, "remarks": "Rent",
+  "createdAt": "2026-10-13T20:17:03.88" }</pre>
+<p>Errors (<code>400</code>): &ldquo;Provide exactly one of destinationAccountId or beneficiaryId&rdquo;, &ldquo;Source and Destination cannot be same&rdquo;, &ldquo;Insufficent balance&rdquo;, &ldquo;Account X is FROZEN and cannot be used for transactions&rdquo;, &ldquo;Beneficiary is PENDING and cannot be used for transfers&rdquo;, &ldquo;Beneficiary does not belong to the source account holder&rdquo;. <code>404</code> for unknown ids. Side effects: 2 ledger entries, Kafka <code>transaction.completed</code>, audit. Rate limit 10/min per user <span class="badge planned">PLANNED</span>.</p>
+</div>
+
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/transactions/{transactionId}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/transactions/reference/{transactionReference}</span> &rarr; TransactionResponse</p>
+<p><span class="m GET">GET</span> <span class="path">/api/v1/transactions/account/{accountId}/history</span> &rarr; newest first</p>
+<pre class="code">[ { "transactionId": 11, "transactionReference": "TXN0918273645012", "amount": 1000.00,
+    "transactionType": "TRANSFER", "transactionStatus": "SUCCESS", "createdAt": "2026-10-13T20:17:03.88" } ]
+// PLANNED: ?page=0&size=20&sort=createdAt,desc -> { "content": [...], "totalElements": 57,
+//          "totalPages": 3, "number": 0, "size": 20 }</pre>
+</div>
+
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/ledger/account/{accountId}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/ledger/transaction/{transactionId}</span></p>
+<pre class="code">[ { "id": 21, "transactionId": 11, "accountId": 1, "accountNumber": "100483920175",
+    "entryType": "DEBIT", "amount": 1000.00, "balanceAfterEntry": 6500.00,
+    "narration": "Rent", "createdAt": "2026-10-13T20:17:03.9" },
+  { "id": 22, "transactionId": 11, "accountId": 2, "accountNumber": "100920384756",
+    "entryType": "CREDIT", "amount": 1000.00, "balanceAfterEntry": 3000.00,
+    "narration": "Rent", "createdAt": "2026-10-13T20:17:03.9" } ]</pre>
+<p><code>/transaction/{id}</code> returns <code>404</code> if the transaction has no ledger lines.</p>
+</div>
+
+<h2>6. Beneficiaries</h2>
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/beneficiaries</span></p>
+<pre class="code">// Request
+{ "customerId": 1, "beneficiaryAccountId": 2, "nickName": "Mom" }
+// 201 Created (BeneficiaryResponse)
+{ "id": 3, "nickName": "Mom", "accountId": 2, "status": "PENDING", "createdAt": "2026-10-13T20:20:00" }</pre>
+<p>Errors: <code>404</code> customer/account; <code>400</code> &ldquo;This account is already added as a beneficiary&rdquo;.</p>
+</div>
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/beneficiaries/{id}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/beneficiaries/customer/{customerId}</span></p>
+<p><span class="m PUT">PUT</span> <span class="path">/api/v1/beneficiaries/{id}</span> &mdash; <code>{ "nickName": "Mother" }</code></p>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/beneficiaries/{id}/activate</span> &mdash; PENDING &rarr; ACTIVE, publishes <code>beneficiary.activated</code>; <code>400</code> if not PENDING.</p>
+<p><span class="m DELETE">DELETE</span> <span class="path">/api/v1/beneficiaries/{id}</span> &rarr; <code>204</code></p>
+</div>
+
+<h2>7. Loans and EMIs</h2>
+<div class="endpoint">
+<p><span class="m POST">POST</span> <span class="path">/api/v1/loans</span></p>
+<pre class="code">// Request
+{ "customerId": 1, "disbursementAccountId": 1, "loanType": "PERSONAL",
+  "principalAmount": 100000.00, "interestRate": 12.00, "tenureMonths": 12 }
+// 201 Created (LoanResponse)
+{ "id": 1, "customerId": 1, "disbursementAccountNumber": "100483920175", "loanType": "PERSONAL",
+  "principalAmount": 100000.00, "interestRate": 12.00, "tenureMonths": 12, "emiAmount": 8884.88,
+  "status": "PENDING", "createdAt": "2026-10-13T20:25:00", "approvedAt": null, "closedAt": null }</pre>
+<p>Rules: principal &ge; 1000, interest &ge; 0.01, tenure 1&ndash;360. EMI = P&middot;r&middot;(1+r)<sup>n</sup>/((1+r)<sup>n</sup>&minus;1), r = rate/1200.</p>
+</div>
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/loans/{loanId}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/loans/customer/{customerId}</span></p>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/loans/{loanId}/approve</span> &mdash; credits principal to the disbursement account, status ACTIVE, creates <i>tenureMonths</i> EMIs.</p>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/loans/{loanId}/reject</span> &mdash; status REJECTED.</p>
+<p>Both: <code>400</code> &ldquo;Loan is ACTIVE and cannot be approved/rejected&rdquo; unless PENDING. Intended for MANAGER role <span class="badge planned">PLANNED</span>.</p>
+</div>
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/emis/loan/{loanId}</span> &mdash; schedule ordered by installment</p>
+<pre class="code">[ { "id": 1, "loanId": 1, "installmentNumber": 1, "dueDate": "2026-11-13", "amount": 8884.88,
+    "status": "PENDING", "paidAt": null }, ... ]</pre>
+<p><span class="m PATCH">PATCH</span> <span class="path">/api/v1/emis/{emiId}/pay</span> &rarr; EmiResponse with <code>"status": "PAID"</code>. <code>400</code> &ldquo;EMI is already paid&rdquo;. Paying the last EMI closes the loan.</p>
+</div>
+
+<h2>8. Audit and Notifications</h2>
+<div class="endpoint">
+<p><span class="m GET">GET</span> <span class="path">/api/v1/audit</span> &middot; <span class="path">/api/v1/audit/entity/{entityName}/{entityId}</span> &middot; <span class="path">/api/v1/audit/user/{userId}</span></p>
+<pre class="code">[ { "id": 55, "performedByUserId": "3f1c...-...", "performedByUsername": "hemant",
+    "action": "UPDATE", "entityName": "Account", "entityId": "1", "oldValue": "ACTIVE",
+    "newValue": "FROZEN", "description": "Account frozen", "ipAddress": "127.0.0.1",
+    "createdAt": "2026-10-13T20:30:00" } ]</pre>
+<p>Restricted to AUDITOR / ADMIN <span class="badge planned">PLANNED</span>.</p>
+</div>
+<div class="endpoint">
+<p>notification-service (port 8081): <span class="m POST">POST</span> <span class="path">/api/v1/notifications</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/notifications/{id}</span> &middot; <span class="m GET">GET</span> <span class="path">/api/v1/notifications?userId=</span></p>
+<pre class="code">// POST body (NotificationRequest)
+{ "userId": "3f1c...", "title": "Transaction Successful", "content": "Your TRANSFER of 1000.00 ...",
+  "notificationType": "EMAIL", "notificationPriority": "HIGH", "recipientEmail": "hemant@example.com",
+  "idempotencyKey": "b2c6...-eventId" }
+// 201 Created, Location: /api/v1/notifications/{notificationId}</pre>
+</div>
+
+<h3>8.1 Kafka event contracts (asynchronous API)</h3>
+<pre class="code">// topic: transaction.completed   key: sourceAccountId
+{ "eventId": "uuid", "transactionId": 11, "transactionReference": "TXN0918273645012",
+  "transactionType": "TRANSFER", "accountId": 1, "accountNumber": "100483920175", "customerId": 1,
+  "userId": "uuid", "email": "hemant@example.com", "amount": 1000.00,
+  "balanceAfterTransaction": 6500.00, "occurredAt": "2026-10-13T20:17:03.9" }
+
+// topic: beneficiary.activated   key: customerId
+{ "eventId": "uuid", "beneficiaryId": 3, "customerId": 1, "userId": "uuid",
+  "email": "hemant@example.com", "nickName": "Mom", "accountNumber": "100920384756",
+  "occurredAt": "2026-10-13T20:21:00" }</pre>
+<p>Contract rules: additive changes only (new optional fields); <code>eventId</code> is the consumer&rsquo;s idempotency key; renaming a field requires a new topic version.</p>
+
+<h2>9. Errors</h2>
+<h3>9.1 Error body</h3>
+<p>Every error &mdash; validation, business rule, authentication, or unexpected &mdash; returns the same JSON shape (<code>ErrorResponse</code>):</p>
+<pre class="code">{ "timestamp": "2026-10-13T20:40:12.551", "status": 400,
+  "error": "amount: Amount must be at least 1.00, accountId: Account id is required",
+  "path": "/api/v1/transactions/deposit" }</pre>
+
+<h3>9.2 Status codes</h3>
+<table>
+  <tr><th>Status</th><th>Raised by</th><th>Meaning / examples</th></tr>
+  <tr><td>200 OK</td><td>&mdash;</td><td>Successful read / action</td></tr>
+  <tr><td>201 Created</td><td>&mdash;</td><td>Register, create customer/account/beneficiary, apply loan</td></tr>
+  <tr><td>204 No Content</td><td>&mdash;</td><td>Delete customer / beneficiary</td></tr>
+  <tr><td>400 Bad Request</td><td><code>MethodArgumentNotValidException</code>, <code>BadRequestException</code></td><td>Validation failure (all field errors joined), business rule violation</td></tr>
+  <tr><td>401 Unauthorized</td><td><code>JwtAuthenticationEntryPoint</code>, <code>InvalidCredentialsException</code>, <code>UnauthorizedException</code></td><td>Missing/invalid/expired JWT; wrong password; password mismatch on register</td></tr>
+  <tr><td>403 Forbidden</td><td>Spring Security <span class="badge planned">PLANNED</span></td><td>Authenticated but role not allowed</td></tr>
+  <tr><td>404 Not Found</td><td><code>ResourceNotFoundException</code>, <code>UserNotFoundException</code></td><td>Unknown id / e-mail</td></tr>
+  <tr><td>409 Conflict</td><td><code>UserAlreadyExistsException</code></td><td>Duplicate e-mail, customer profile, phone, PAN, Aadhaar</td></tr>
+  <tr><td>413 Payload Too Large</td><td>Nginx <span class="badge planned">PLANNED</span></td><td>Body &gt; 1 MB</td></tr>
+  <tr><td>429 Too Many Requests</td><td>Nginx / RateLimitFilter <span class="badge planned">PLANNED</span></td><td>Rate limit hit; <code>Retry-After</code> header</td></tr>
+  <tr><td>500 Internal Server Error</td><td>Catch-all handler</td><td>Generic message &ldquo;Something went wrong. Please try again later.&rdquo; (no stack trace leaked). Also currently returned for optimistic-lock conflicts and malformed JSON <span class="badge gap">GAP</span></td></tr>
+</table>
+
+<h3>9.3 Error catalogue</h3>
+<table>
+  <tr><th>Code</th><th>Message</th><th>Endpoint(s)</th></tr>
+  <tr><td>400</td><td>insufficient balance / Insufficent balance</td><td>withdraw, transfer</td></tr>
+  <tr><td>400</td><td>Account &lt;no&gt; is &lt;status&gt; and cannot be used for transactions</td><td>deposit, withdraw, transfer</td></tr>
+  <tr><td>400</td><td>Source and Destination cannot be same</td><td>transfer</td></tr>
+  <tr><td>400</td><td>Provide exactly one of destinationAccountId or beneficiaryId</td><td>transfer</td></tr>
+  <tr><td>400</td><td>Beneficiary is &lt;status&gt; and cannot be used for transfers</td><td>transfer</td></tr>
+  <tr><td>400</td><td>Beneficiary does not belong to the source account holder</td><td>transfer</td></tr>
+  <tr><td>400</td><td>Closed account cannot be modified</td><td>update/freeze/close account</td></tr>
+  <tr><td>400</td><td>Account is already frozen</td><td>freeze</td></tr>
+  <tr><td>400</td><td>Account balance must be zero before closing</td><td>close</td></tr>
+  <tr><td>400</td><td>This account is already added as a beneficiary</td><td>add beneficiary</td></tr>
+  <tr><td>400</td><td>Beneficiary is &lt;status&gt; and cannot be activated</td><td>activate</td></tr>
+  <tr><td>400</td><td>Loan is &lt;status&gt; and cannot be approved / rejected</td><td>approve, reject</td></tr>
+  <tr><td>400</td><td>EMI is already paid</td><td>pay EMI</td></tr>
+  <tr><td>401</td><td>Authentication required: invalid, missing, or expired token</td><td>all protected</td></tr>
+  <tr><td>401</td><td>Password didnt match &middot; Password do not match</td><td>login &middot; register</td></tr>
+  <tr><td>404</td><td>&lt;Resource&gt; not found with id: &lt;id&gt;</td><td>all lookups</td></tr>
+  <tr><td>404</td><td>Invalid email id</td><td>login</td></tr>
+  <tr><td>409</td><td>Email already exists</td><td>register</td></tr>
+  <tr><td>409</td><td>Customer profile already exists ... / PAN ... / Aadhaar number is already linked ...</td><td>customer create/update/KYC</td></tr>
+</table>
+
+<h2>10. OpenAPI / Swagger <span class="badge planned">PLANNED</span></h2>
+<pre class="code">&lt;dependency&gt;
+  &lt;groupId&gt;org.springdoc&lt;/groupId&gt;
+  &lt;artifactId&gt;springdoc-openapi-starter-webmvc-ui&lt;/artifactId&gt;
+  &lt;version&gt;2.6.0&lt;/version&gt;
+&lt;/dependency&gt;
+
+// SecurityConfig - make docs public
+.requestMatchers("/auth/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+
+// Optional: JWT "Authorize" button
+@OpenAPIDefinition(info = @Info(title = "Enterprise Digital Banking API", version = "v1"))
+@SecurityScheme(name = "bearerAuth", type = SecuritySchemeType.HTTP, scheme = "bearer", bearerFormat = "JWT")
+@Configuration public class OpenApiConfig {}
+
+// Per controller
+@Tag(name = "Loans", description = "Loan application and approval")
+@SecurityRequirement(name = "bearerAuth")</pre>
+<table>
+  <tr><th>URL</th><th>Content</th></tr>
+  <tr><td><code>/swagger-ui.html</code></td><td>Interactive UI with &ldquo;Try it out&rdquo;</td></tr>
+  <tr><td><code>/v3/api-docs</code></td><td>OpenAPI 3 JSON (import into Postman / generate clients)</td></tr>
+  <tr><td><code>/v3/api-docs.yaml</code></td><td>OpenAPI 3 YAML</td></tr>
+</table>
+
+<h2>11. Quick-start cURL Script</h2>
+<pre class="code">BASE=http://localhost:8080
+curl -s -X POST $BASE/auth/register -H "Content-Type: application/json" -d '{"fullName":"Hemant Mahto",
+  "username":"hemant","email":"hemant@example.com","phoneNumber":"9876543210",
+  "password":"Secret@123","confirmPassword":"Secret@123"}'
+TOKEN=$(curl -s -X POST $BASE/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"hemant@example.com","password":"Secret@123"}' | jq -r .token)
+H="Authorization: Bearer $TOKEN"
+curl -s -X POST $BASE/api/v1/customers -H "$H" -H "Content-Type: application/json" -d '{"firstName":"Hemant",
+  "lastName":"Mahto","dateOfBirth":"2000-05-14","phoneNumber":"9876543210","address":"12 MG Road",
+  "city":"Ranchi","state":"Jharkhand","country":"India","postalCode":"834001","email":"hemant@example.com"}'
+curl -s -X POST $BASE/api/v1/accounts -H "$H" -H "Content-Type: application/json" \
+  -d '{"customerId":1,"accountType":"SAVINGS","branch":"Main","openingBalance":5000}'
+curl -s -X POST $BASE/api/v1/accounts -H "$H" -H "Content-Type: application/json" \
+  -d '{"customerId":1,"accountType":"CURRENT","branch":"Main","openingBalance":0}'
+curl -s -X POST $BASE/api/v1/transactions/transfer -H "$H" -H "Content-Type: application/json" \
+  -d '{"sourceAccountId":1,"destinationAccountId":2,"amount":1000,"remarks":"test"}'
+curl -s $BASE/api/v1/ledger/account/1 -H "$H"</pre>

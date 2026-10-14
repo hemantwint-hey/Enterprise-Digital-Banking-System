@@ -25,6 +25,7 @@ import org.example.enterprisedigitalbankingsystem.transaction.entity.Transaction
 import org.example.enterprisedigitalbankingsystem.transaction.mapper.TransactionMapper;
 import org.example.enterprisedigitalbankingsystem.transaction.repository.TransactionRepository;
 import org.example.enterprisedigitalbankingsystem.transaction.service.TransactionService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionEventProducer transactionEventProducer;
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public TransactionResponse deposit(DepositRequest request) {
 
         Account account = accountRepository.findById(request.getAccountId())
@@ -82,6 +84,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public TransactionResponse withdraw(WithdrawRequest request) {
         Account account  = accountRepository.findById(request.getAccountId())
                 .orElseThrow(()->
@@ -172,6 +175,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @CacheEvict(value = {"accountsById", "accountsByNumber", "accountsByCustomer"}, allEntries = true)
     public TransactionResponse transfer(TransferRequest request) {
         Account sourceAccount = accountRepository.findById(request.getSourceAccountId())
                 .orElseThrow(() ->

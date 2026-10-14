@@ -1,0 +1,469 @@
+<!-- title: Flow and Interaction Diagrams | subtitle: Data Flow Diagrams (levels 0-2), sequence diagrams, activity diagrams and state diagrams - what happens when a user performs an action. | out: 03-Flow-and-Interaction-Diagrams.pdf -->
+
+<h2>1. Data Flow Diagrams</h2>
+<p>DFD notation used: rectangles = external entities, rounded boxes = processes, cylinders = data stores, arrows = data flows (labelled with the data that moves).</p>
+
+<h3>1.1 Level 0 &mdash; Context diagram</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  CU["Customer"] -->|"registration, credentials,<br/>transfer / loan / beneficiary requests"| SYS(("0<br/>Enterprise Digital<br/>Banking System"))
+  SYS -->|"JWT, balances, statements,<br/>transaction receipts, EMI schedule"| CU
+  ST["Bank staff<br/>Employee / Manager"] -->|"customer onboarding, KYC,<br/>account actions, loan decisions"| SYS
+  SYS -->|"customer / account / loan data"| ST
+  AD["Auditor"] -->|"audit queries"| SYS
+  SYS -->|"audit trail, ledgers"| AD
+  SYS -->|"e-mail / SMS / push"| MAIL["Notification providers<br/>SMTP etc."]
+  MAIL -->|"delivered message"| CU
+</pre>
+<div class="cap">Figure 1 &mdash; DFD level 0</div>
+</div>
+
+<h3>1.2 Level 1 &mdash; Main processes</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  CU["Customer / Staff"]
+  P1(("1.0<br/>Authenticate"))
+  P2(("2.0<br/>Manage customers<br/>& KYC"))
+  P3(("3.0<br/>Manage accounts"))
+  P4(("4.0<br/>Process<br/>transactions"))
+  P5(("5.0<br/>Manage<br/>beneficiaries"))
+  P6(("6.0<br/>Loans & EMIs"))
+  P7(("7.0<br/>Audit"))
+  P8(("8.0<br/>Notify"))
+  D1[("D1 users")]; D2[("D2 customers")]; D3[("D3 accounts")]; D4[("D4 transactions")]
+  D5[("D5 ledger_entries")]; D6[("D6 beneficiaries")]; D7[("D7 loans / emis")]; D8[("D8 audit_logs")]
+  K{{"Kafka topics"}}; D9[("D9 notification")]
+
+  CU -->|credentials| P1 -->|JWT| CU
+  P1 <-->|user record| D1
+  CU -->|profile, PAN, Aadhaar| P2 <--> D2
+  P2 -->|kyc_verified| D1
+  CU -->|account request| P3 <--> D3
+  CU -->|deposit / withdraw / transfer| P4
+  P4 <-->|balances| D3
+  P4 -->|transaction| D4
+  P4 -->|debit / credit lines| D5
+  P4 -->|resolve payee| D6
+  CU -->|payee details| P5 <--> D6
+  CU -->|loan application, EMI payment| P6 <--> D7
+  P6 -->|disbursement credit| D3
+  P1 & P3 & P4 & P5 -->|audit event| P7 --> D8
+  P4 -->|transaction.completed| K
+  P5 -->|beneficiary.activated| K
+  K --> P8 --> D9
+  P8 -->|e-mail| CU
+</pre>
+<div class="cap">Figure 2 &mdash; DFD level 1</div>
+</div>
+
+<h3>1.3 Level 2 &mdash; Process 4.0 &ldquo;Process transactions&rdquo; (transfer)</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart TB
+  CU["Customer"] -->|"TransferRequest<br/>sourceAccountId, destinationAccountId | beneficiaryId, amount"| P41(("4.1<br/>Validate request"))
+  P41 -->|lookup| D3[("accounts")]
+  P41 -->|lookup payee| D6[("beneficiaries")]
+  P41 -->|"valid source, destination"| P42(("4.2<br/>Check status<br/>& balance"))
+  P42 -->|"approved amount"| P43(("4.3<br/>Post balances"))
+  P43 -->|"new balances (version++)"| D3
+  P43 --> P44(("4.4<br/>Record transaction"))
+  P44 -->|"reference TXN..., SUCCESS"| D4[("transactions")]
+  P44 --> P45(("4.5<br/>Post ledger"))
+  P45 -->|"DEBIT source, CREDIT destination"| D5[("ledger_entries")]
+  P45 --> P46(("4.6<br/>Publish event"))
+  P46 -->|TransactionCompletedEvent| K{{"transaction.completed"}}
+  P46 --> P47(("4.7<br/>Audit"))
+  P47 --> D8[("audit_logs")]
+  P47 -->|TransactionResponse| CU
+</pre>
+<div class="cap">Figure 3 &mdash; DFD level 2 for a transfer</div>
+</div>
+
+<h2>2. Sequence Diagrams &mdash; Authentication</h2>
+<h3>2.1 Register</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant AC as AuthController
+  participant US as UserServiceImpl
+  participant UR as UserRepository
+  participant PE as BCryptPasswordEncoder
+  participant AS as AuditService
+  C->>AC: POST /auth/register {fullName, username, email, phone, password, confirmPassword}
+  AC->>AC: @Valid (sizes, email format, phone regex)
+  alt validation fails
+    AC-->>C: 400 ErrorResponse "field: message"
+  end
+  AC->>US: register(request)
+  US->>UR: existsByEmail(email)
+  alt e-mail taken
+    US-->>C: 409 "Email already exists"
+  end
+  US->>US: password equals confirmPassword?
+  alt mismatch
+    US-->>C: 401 "Password do not match"
+  end
+  US->>PE: encode(password)
+  US->>UR: save(User role=CUSTOMER, status=ACTIVE)
+  US->>AS: log(CREATE, "User", userId, "User registered")
+  US-->>AC: RegisterResponse(success=true)
+  AC-->>C: 201 Created
+</pre>
+<div class="cap">Figure 4 &mdash; Register</div>
+</div>
+
+<h3>2.2 Login</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant AC as AuthController
+  participant US as UserServiceImpl
+  participant UR as UserRepository
+  participant PE as PasswordEncoder
+  participant J as JwtUtil
+  participant AS as AuditService
+  C->>AC: POST /auth/login {email, password}
+  AC->>US: login(request)
+  US->>UR: findByEmail(email)
+  alt user not found
+    US->>AS: log(LOGIN_FAILED, "user not found")
+    US-->>C: 404 "Invalid email id"
+  end
+  US->>PE: matches(raw, hash)
+  alt wrong password
+    US->>AS: log(LOGIN_FAILED, "invalid password")
+    US-->>C: 401 "Password didnt match"
+  end
+  US->>J: generateToken(email)
+  J-->>US: HS256 JWT (sub=email, exp=now+24h)
+  US->>AS: log(LOGIN, "Login successful")
+  US-->>C: 200 {success, message, token}
+</pre>
+<div class="cap">Figure 5 &mdash; Login</div>
+</div>
+
+<h3>2.3 Authenticated request (JWT filter)</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant F as JwtAuthenticationFilter
+  participant J as JwtUtil
+  participant UDS as CustomUserDetailsService
+  participant SC as SecurityContext
+  participant EP as JwtAuthenticationEntryPoint
+  participant CT as Controller
+  C->>F: GET /api/v1/... Authorization: Bearer token
+  alt header missing / not Bearer
+    F->>CT: continue unauthenticated
+    CT-->>EP: AuthenticationException
+    EP-->>C: 401 "Authentication required..."
+  else token present
+    F->>J: extractEmail(token) (verifies signature)
+    F->>UDS: loadUserByUsername(email)
+    F->>J: validateToken(token, user) (subject match, not expired)
+    F->>SC: setAuthentication(user, authorities=[ROLE])
+    F->>CT: continue
+    CT-->>C: 200 response
+  end
+  Note over F,EP: JwtException or unknown user: context cleared, entry point returns 401
+</pre>
+<div class="cap">Figure 6 &mdash; Every protected request</div>
+</div>
+
+<h2>3. Sequence Diagrams &mdash; Money Movement</h2>
+<h3>3.1 Transfer (the core flow)</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant TC as TransactionController
+  participant TS as TransactionServiceImpl
+  participant AR as AccountRepository
+  participant BR as BeneficiaryRepository
+  participant TR as TransactionRepository
+  participant LS as LedgerService
+  participant EP as TransactionEventProducer
+  participant AU as AuditService
+  participant K as Kafka
+  C->>TC: POST /api/v1/transactions/transfer
+  TC->>TS: transfer(request)
+  Note over TS: @Transactional begins
+  TS->>AR: findById(sourceAccountId)
+  alt beneficiaryId given
+    TS->>BR: findById(beneficiaryId)
+    TS->>TS: must be ACTIVE and owned by source customer
+  else destinationAccountId given
+    TS->>AR: findById(destinationAccountId)
+  end
+  TS->>TS: source != destination, both ACTIVE, balance >= amount
+  TS->>AR: save(source balance - amount)
+  TS->>AR: save(destination balance + amount)
+  TS->>TR: save(Transaction TRANSFER, SUCCESS, TXN ref)
+  TS->>LS: recordTransactionEntries(txn)
+  LS->>LS: DEBIT source + CREDIT destination
+  TS->>EP: publish(TransactionCompletedEvent)
+  EP-)K: send("transaction.completed", key=accountId, json)
+  TS->>AU: log(CREATE, "Transaction", "Transfer made")
+  Note over TS: commit (all or nothing)
+  TS-->>TC: TransactionResponse
+  TC-->>C: 200 OK
+</pre>
+<div class="cap">Figure 7 &mdash; Transfer. Any exception before commit rolls back balances, transaction, ledger and audit rows.</div>
+</div>
+
+<h3>3.2 Deposit and withdrawal</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant TS as TransactionServiceImpl
+  participant AR as AccountRepository
+  participant TR as TransactionRepository
+  participant LS as LedgerService
+  participant AU as AuditService
+  C->>TS: deposit / withdraw {accountId, amount, remarks}
+  TS->>AR: findById(accountId)
+  TS->>TS: account ACTIVE?
+  opt withdraw
+    TS->>TS: balance >= amount? else 400 "insufficient balance"
+  end
+  TS->>AR: save(new balance)
+  TS->>TR: save(DEPOSIT or WITHDRAWAL, SUCCESS)
+  TS->>LS: recordTransactionEntries: CREDIT (deposit) / DEBIT (withdraw)
+  TS->>AU: log(CREATE, "Deposit made" / "Withdrawal made")
+  TS-->>C: TransactionResponse
+</pre>
+<div class="cap">Figure 8 &mdash; Deposit / withdrawal (no Kafka event today)</div>
+</div>
+
+<h2>4. Sequence Diagrams &mdash; Beneficiary, Loan and EMI</h2>
+<h3>4.1 Add and activate beneficiary &rarr; notification</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor C as Client
+  participant BS as BeneficiaryServiceImpl
+  participant DB as MySQL banking_db
+  participant P as BeneficiaryEventProducer
+  participant K as Kafka
+  participant NC as BeneficiaryEventConsumer
+  participant NSV as NotificationService
+  participant NDB as notification_db
+  participant SMTP as SMTP
+  C->>BS: POST /beneficiaries {customerId, beneficiaryAccountId, nickName}
+  BS->>DB: customer + account exist, not duplicate
+  BS->>DB: save(status=PENDING) + audit CREATE
+  BS-->>C: 201 BeneficiaryResponse(PENDING)
+  C->>BS: PATCH /beneficiaries/{id}/activate
+  BS->>DB: status PENDING -> ACTIVE + audit UPDATE
+  BS->>P: publish(BeneficiaryActivatedEvent)
+  P-)K: beneficiary.activated (key=customerId)
+  BS-->>C: 200 BeneficiaryResponse(ACTIVE)
+  K-)NC: poll (group notification-service)
+  NC->>NSV: send(NotificationRequest EMAIL, MEDIUM, idempotencyKey=eventId)
+  NSV->>NDB: insert (unique idempotency_key)
+  NSV->>SMTP: deliver (retry with exponential back-off)
+  NSV->>NDB: status SENT or FAILED
+</pre>
+<div class="cap">Figure 9 &mdash; Beneficiary lifecycle and asynchronous notification</div>
+</div>
+
+<h3>4.2 Apply for and approve a loan</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor CU as Customer
+  actor M as Manager
+  participant LS as LoanServiceImpl
+  participant DB as MySQL
+  participant ES as EmiServiceImpl
+  CU->>LS: POST /loans {customerId, disbursementAccountId, loanType, principal, rate, tenure}
+  LS->>DB: customer + account exist
+  LS->>LS: emi = P*r*(1+r)^n / ((1+r)^n - 1)
+  LS->>DB: save(Loan PENDING, emiAmount)
+  LS-->>CU: 201 LoanResponse(PENDING)
+  M->>LS: PATCH /loans/{id}/approve
+  LS->>LS: status must be PENDING
+  LS->>DB: account.balance += principal (disbursement)
+  LS->>DB: loan ACTIVE, approvedAt=now
+  LS->>ES: generateSchedule(loan)
+  loop installment 1..tenureMonths
+    ES->>ES: dueDate = today + i months, amount = emiAmount
+  end
+  ES->>DB: saveAll(EMIs PENDING)
+  LS-->>M: 200 LoanResponse(ACTIVE)
+</pre>
+<div class="cap">Figure 10 &mdash; Loan application and approval (reject: PENDING &rarr; REJECTED, nothing else)</div>
+</div>
+
+<h3>4.3 Pay EMI</h3>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor CU as Customer
+  participant ES as EmiServiceImpl
+  participant ER as EmiRepository
+  participant LR as LoanRepository
+  CU->>ES: PATCH /emis/{emiId}/pay
+  ES->>ER: findById(emiId)
+  alt already PAID
+    ES-->>CU: 400 "EMI is already paid"
+  end
+  ES->>ER: save(status=PAID, paidAt=now)
+  ES->>ER: existsByLoanIdAndStatusNot(loanId, PAID)
+  alt no unpaid EMIs left
+    ES->>LR: save(loan CLOSED, closedAt=now)
+  end
+  ES-->>CU: 200 EmiResponse
+  Note over ES: PLANNED - debit EMI amount from account via TransactionService + ledger + audit
+</pre>
+<div class="cap">Figure 11 &mdash; EMI payment</div>
+</div>
+
+<h2>5. Activity Diagrams</h2>
+<h3>5.1 Transfer validation</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart TB
+  S([Start]) --> A[Load source account]
+  A -->|not found| E404([404 Not Found])
+  A --> B{"Exactly one of<br/>destinationAccountId / beneficiaryId?"}
+  B -->|no| E400a([400 Bad Request])
+  B -->|beneficiaryId| C[Load beneficiary]
+  C -->|not found| E404
+  C --> D{"ACTIVE and owned by<br/>source customer?"}
+  D -->|no| E400a
+  D -->|yes| F[Destination = beneficiary account]
+  B -->|destinationAccountId| G[Load destination]
+  G -->|not found| E404
+  G --> H
+  F --> H{"source != destination?"}
+  H -->|no| E400a
+  H --> I{"Both accounts ACTIVE?"}
+  I -->|no| E400a
+  I --> J{"balance >= amount?"}
+  J -->|no| E400b([400 Insufficient balance])
+  J --> K[Debit source, credit destination]
+  K --> L[Save transaction + ledger DEBIT/CREDIT]
+  L --> M[Publish Kafka event, write audit]
+  M --> Z([200 TransactionResponse])
+</pre>
+<div class="cap">Figure 12 &mdash; Transfer activity</div>
+</div>
+
+<h3>5.2 Customer onboarding (end to end)</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  A([Register user]) --> B[Login - obtain JWT]
+  B --> C[Create customer profile<br/>KYC = PENDING]
+  C --> D[Complete KYC<br/>PAN + Aadhaar]
+  D --> E{PAN/Aadhaar unique?}
+  E -->|no| X([409 Conflict])
+  E -->|yes| F[KYC VERIFIED<br/>user.kycVerified = true]
+  F --> G[Open account<br/>SAVINGS / CURRENT]
+  G --> H[Deposit opening funds]
+  H --> I[Add + activate beneficiaries]
+  I --> J([Ready to transact])
+</pre>
+<div class="cap">Figure 13 &mdash; Onboarding activity. Note: account opening does not yet require KYC = VERIFIED <span class="badge gap">GAP</span></div>
+</div>
+
+<h3>5.3 Overdue EMI job <span class="badge planned">PLANNED</span></h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  T([Daily 00:30 @Scheduled]) --> Q[Find EMIs PENDING with dueDate before today]
+  Q --> L{any?}
+  L -->|no| E([End])
+  L -->|yes| U[Set status OVERDUE]
+  U --> A[Audit UPDATE per EMI]
+  A --> N[Publish emi.overdue event]
+  N --> E
+</pre>
+<div class="cap">Figure 14 &mdash; Planned overdue detection</div>
+</div>
+
+<h2>6. State Diagrams</h2>
+<div class="grid2">
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> ACTIVE: createAccount
+  ACTIVE --> FROZEN: freeze
+  ACTIVE --> CLOSED: close (balance = 0)
+  FROZEN --> CLOSED: close (balance = 0)
+  ACTIVE --> BLOCKED: block (planned)
+  FROZEN --> ACTIVE: unfreeze (planned)
+  CLOSED --> [*]
+</pre>
+<div class="cap">Figure 15 &mdash; Account. Only ACTIVE can transact; CLOSED is terminal.</div>
+</div>
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: applyForLoan
+  PENDING --> ACTIVE: approve (disburse + EMI schedule)
+  PENDING --> REJECTED: reject
+  ACTIVE --> CLOSED: last EMI paid
+  REJECTED --> [*]
+  CLOSED --> [*]
+</pre>
+<div class="cap">Figure 16 &mdash; Loan</div>
+</div>
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: generateSchedule
+  PENDING --> PAID: payEmi
+  PENDING --> OVERDUE: due date passed (planned job)
+  OVERDUE --> PAID: payEmi
+  PAID --> [*]
+</pre>
+<div class="cap">Figure 17 &mdash; EMI</div>
+</div>
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: addBeneficiary
+  PENDING --> ACTIVE: activate (Kafka event)
+  ACTIVE --> BLOCKED: block (planned)
+  PENDING --> [*]: delete
+  ACTIVE --> [*]: delete
+</pre>
+<div class="cap">Figure 18 &mdash; Beneficiary</div>
+</div>
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: createCustomer
+  PENDING --> VERIFIED: completeKYC
+  PENDING --> IN_PROGRESS: documents submitted (planned)
+  IN_PROGRESS --> VERIFIED: approved (planned)
+  IN_PROGRESS --> REJECTED: rejected (planned)
+</pre>
+<div class="cap">Figure 19 &mdash; Customer KYC</div>
+</div>
+<div class="figure">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> CREATED
+  CREATED --> PROCESSING
+  PROCESSING --> SENT
+  PROCESSING --> RETRYING: delivery error
+  RETRYING --> PROCESSING: back-off elapsed
+  RETRYING --> FAILED: retries exhausted
+  SENT --> [*]
+  FAILED --> [*]
+</pre>
+<div class="cap">Figure 20 &mdash; Notification (notification-service)</div>
+</div>
+</div>
+
+<h3>6.1 Transaction status</h3>
+<p>Transactions are written directly as <code>SUCCESS</code> inside the same database transaction that moves the money; a failure rolls everything back, so no <code>FAILED</code> row is stored today. <code>PENDING</code> (asynchronous / inter-bank payments), <code>FAILED</code> (persisted failures) and <code>REVERSED</code> (compensating transaction) are reserved for future use.</p>

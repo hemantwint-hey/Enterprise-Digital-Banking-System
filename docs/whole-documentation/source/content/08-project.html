@@ -1,0 +1,206 @@
+<!-- title: Project and Maintenance Documentation | subtitle: Project overview, requirements, business rules, developer setup guide, coding conventions, known limitations, roadmap and changelog - everything a new developer needs to continue the project. | out: 08-Project-and-Maintenance.pdf -->
+
+<h2>1. Project Overview</h2>
+<p><b>Enterprise Digital Banking System</b> is a Spring Boot backend that simulates a retail bank: JWT-secured users, customers with KYC, accounts, deposits/withdrawals/transfers on a double-entry ledger, beneficiaries, loans with EMI schedules and a complete audit trail. A separate <b>notification-service</b> consumes Kafka events and notifies customers.</p>
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Repositories</td><td><code>Enterprise-Digital-Banking-System</code> (banking-app, port 8080) &middot; <code>notification-service</code> (port 8081)</td></tr>
+  <tr><td>Language / framework</td><td>Java 17, Spring Boot 4.1, Maven wrapper</td></tr>
+  <tr><td>Data</td><td>MySQL 8 (<code>banking_db</code>, <code>notification_db</code>)</td></tr>
+  <tr><td>Messaging</td><td>Apache Kafka 3.8 (KRaft)</td></tr>
+  <tr><td>Size today</td><td>10 feature modules, 9 tables, 40 REST endpoints, 2 Kafka topics, 38 tests</td></tr>
+  <tr><td>Main branch</td><td><code>master</code></td></tr>
+</table>
+
+<h3>1.1 Documentation set</h3>
+<table>
+  <tr><th>#</th><th>Document</th><th>Read it when you need to&hellip;</th></tr>
+  <tr><td>01</td><td>Architecture</td><td>understand components, layers, deployment and design decisions (ADRs)</td></tr>
+  <tr><td>02</td><td>Database</td><td>see the ER diagram, columns, constraints, indexes, migrations</td></tr>
+  <tr><td>03</td><td>Flows and interactions</td><td>follow what happens on login, transfer, loan approval, EMI payment</td></tr>
+  <tr><td>04</td><td>API</td><td>call an endpoint: request, response, errors</td></tr>
+  <tr><td>05</td><td>Security</td><td>check auth, roles, sensitive data, threats, audit policy</td></tr>
+  <tr><td>06</td><td>Testing</td><td>run or write tests</td></tr>
+  <tr><td>07</td><td>Deployment and operations</td><td>run, deploy, monitor, back up, troubleshoot</td></tr>
+  <tr><td>08</td><td>Project and maintenance (this)</td><td>get started and continue the work</td></tr>
+</table>
+
+<h2>2. Requirements</h2>
+<h3>2.1 Functional requirements</h3>
+<table>
+  <tr><th>ID</th><th>Requirement</th><th>Status</th></tr>
+  <tr><td>FR-01</td><td>A visitor can register with name, username, e-mail, phone and password.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-02</td><td>A user can log in with e-mail and password and receive a JWT.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-03</td><td>A user can refresh tokens, change, reset and recover a password, and log out.</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>FR-04</td><td>Staff can create, view, update, list and delete customer profiles linked to users.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-05</td><td>Staff can complete KYC with a unique PAN and Aadhaar.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-06</td><td>Staff can open SAVINGS / CURRENT accounts with a generated unique account number.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-07</td><td>Staff can update, freeze and close accounts (close only at zero balance).</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-08</td><td>Deposit to and withdraw from an ACTIVE account.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-09</td><td>Transfer between ACTIVE accounts by account id or by an ACTIVE beneficiary.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-10</td><td>Every money movement produces ledger DEBIT/CREDIT lines with running balance.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-11</td><td>View transaction by id / reference, account history and ledger.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-12</td><td>Customers can add, rename, activate and remove beneficiaries.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-13</td><td>Customers can apply for loans; the EMI is calculated on application.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-14</td><td>Managers can approve (disburse + EMI schedule) or reject loans.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-15</td><td>Customers can pay EMIs; paying the last EMI closes the loan.</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>FR-16</td><td>Paying an EMI debits the customer&rsquo;s account via a transaction and ledger entries.</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>FR-17</td><td>Overdue EMIs are flagged automatically each day.</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>FR-18</td><td>Every significant action is recorded in an audit log searchable by entity or user.</td><td><span class="badge built">BUILT</span> (loan/EMI/customer events planned)</td></tr>
+  <tr><td>FR-19</td><td>Customers are notified (e-mail) of transfers and beneficiary activation.</td><td><span class="badge built">BUILT</span> (SMTP creds deferred)</td></tr>
+  <tr><td>FR-20</td><td>Cards: issue, block, set limits for an account.</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>FR-21</td><td>List endpoints support pagination, sorting and customer name search.</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h3>2.2 Non-functional requirements</h3>
+<table>
+  <tr><th>ID</th><th>Category</th><th>Requirement</th></tr>
+  <tr><td>NFR-01</td><td>Consistency</td><td>A money movement is atomic: balances, transaction, ledger and audit commit together or not at all.</td></tr>
+  <tr><td>NFR-02</td><td>Accuracy</td><td>Money uses BigDecimal / DECIMAL(18,2); no floating-point values are stored.</td></tr>
+  <tr><td>NFR-03</td><td>Concurrency</td><td>Concurrent updates to one account never lose an update (optimistic locking).</td></tr>
+  <tr><td>NFR-04</td><td>Security</td><td>Passwords hashed with BCrypt; stateless JWT; no secrets in source; role-based access (planned).</td></tr>
+  <tr><td>NFR-05</td><td>Availability</td><td>A notification outage never fails a banking operation.</td></tr>
+  <tr><td>NFR-06</td><td>Performance</td><td>p95 &lt; 250 ms for transfers at 50 req/s; account reads cached (planned).</td></tr>
+  <tr><td>NFR-07</td><td>Auditability</td><td>Who, what, when, from which IP, for every state change; retained &ge; 8 years.</td></tr>
+  <tr><td>NFR-08</td><td>Maintainability</td><td>Package-by-feature, consistent layering, &ge; 80 % service-layer test coverage.</td></tr>
+  <tr><td>NFR-09</td><td>Portability</td><td>Runs with <code>docker compose up</code>; configuration by environment variables.</td></tr>
+  <tr><td>NFR-10</td><td>Observability</td><td>Health, metrics and dashboards via Actuator, Prometheus, Grafana (planned).</td></tr>
+</table>
+
+<h2>3. Business Rules</h2>
+<table>
+  <tr><th>ID</th><th>Area</th><th>Rule</th><th>Enforced in</th></tr>
+  <tr><td>BR-01</td><td>Users</td><td>E-mail is unique; password and confirmation must match; new users are CUSTOMER and ACTIVE.</td><td>UserServiceImpl</td></tr>
+  <tr><td>BR-02</td><td>Customers</td><td>One customer profile per user; phone, PAN and Aadhaar are unique across customers.</td><td>CustomerServiceImpl + unique constraints</td></tr>
+  <tr><td>BR-03</td><td>KYC</td><td>Completing KYC sets the customer VERIFIED and the user&rsquo;s <code>kycVerified</code> flag; deleting the customer resets it.</td><td>CustomerServiceImpl</td></tr>
+  <tr><td>BR-04</td><td>Accounts</td><td>Account numbers are 12 digits starting with &ldquo;10&rdquo;, randomly generated, unique.</td><td>AccountServiceImpl</td></tr>
+  <tr><td>BR-05</td><td>Accounts</td><td>Opening balance &ge; 0. New accounts are ACTIVE.</td><td>DTO validation, entity default</td></tr>
+  <tr><td>BR-06</td><td>Accounts</td><td>A CLOSED account cannot be updated, frozen or closed again. Freezing a FROZEN account is rejected.</td><td>AccountServiceImpl</td></tr>
+  <tr><td>BR-07</td><td>Accounts</td><td>An account can be closed only when its balance is exactly zero.</td><td>AccountServiceImpl</td></tr>
+  <tr><td>BR-08</td><td>Transactions</td><td>Minimum amount is 1.00; remarks &le; 255 chars.</td><td>DTO validation</td></tr>
+  <tr><td>BR-09</td><td>Transactions</td><td>Only ACTIVE accounts can send or receive money.</td><td>TransactionServiceImpl</td></tr>
+  <tr><td>BR-10</td><td>Transactions</td><td>Withdrawals and transfers cannot exceed the available balance (no overdraft).</td><td>TransactionServiceImpl</td></tr>
+  <tr><td>BR-11</td><td>Transfers</td><td>Exactly one of destination account / beneficiary; source &ne; destination.</td><td>TransactionServiceImpl</td></tr>
+  <tr><td>BR-12</td><td>Transfers</td><td>A beneficiary used for a transfer must be ACTIVE and belong to the source account&rsquo;s customer.</td><td>TransactionServiceImpl</td></tr>
+  <tr><td>BR-13</td><td>Ledger</td><td>Deposit = 1 CREDIT; withdrawal = 1 DEBIT; transfer = 1 DEBIT + 1 CREDIT of equal amount. Each line stores the balance after posting.</td><td>LedgerServiceImpl</td></tr>
+  <tr><td>BR-14</td><td>Transactions</td><td>Every transaction has a unique reference &ldquo;TXN&rdquo; + 13 digits.</td><td>TransactionServiceImpl</td></tr>
+  <tr><td>BR-15</td><td>Beneficiaries</td><td>The same account cannot be added twice by one customer. New beneficiaries are PENDING and must be activated before use.</td><td>BeneficiaryServiceImpl</td></tr>
+  <tr><td>BR-16</td><td>Loans</td><td>Principal &ge; 1 000; interest rate &ge; 0.01 % p.a.; tenure 1&ndash;360 months.</td><td>DTO validation</td></tr>
+  <tr><td>BR-17</td><td>Loans</td><td>EMI = P&middot;r&middot;(1+r)<sup>n</sup> / ((1+r)<sup>n</sup>&minus;1), r = annual rate / 12 / 100, rounded HALF_UP to 2 decimals.</td><td>LoanServiceImpl</td></tr>
+  <tr><td>BR-18</td><td>Loans</td><td>Only PENDING loans can be approved or rejected. Approval credits the principal to the disbursement account and creates one EMI per month, due monthly from the approval date.</td><td>LoanServiceImpl, EmiServiceImpl</td></tr>
+  <tr><td>BR-19</td><td>EMIs</td><td>An EMI can be paid once. When no unpaid EMI remains, the loan becomes CLOSED.</td><td>EmiServiceImpl</td></tr>
+  <tr><td>BR-20</td><td>Notifications</td><td>Transfers and beneficiary activations emit events; each event is notified at most once (idempotency key = eventId).</td><td>Producers, notification-service</td></tr>
+  <tr><td>BR-21</td><td>Audit</td><td>Audit entries never contain passwords and are never modified or deleted.</td><td>AuditServiceImpl</td></tr>
+</table>
+
+<h2>4. Developer Setup Guide</h2>
+<h3>4.1 Tools</h3>
+<table>
+  <tr><th>Tool</th><th>Version</th><th>Notes</th></tr>
+  <tr><td>JDK</td><td>17+</td><td>Temurin or Corretto</td></tr>
+  <tr><td>IDE</td><td>IntelliJ IDEA</td><td>Enable annotation processing (Lombok plugin)</td></tr>
+  <tr><td>MySQL</td><td>8.0</td><td>Local install or <code>docker run -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=... mysql:8.0</code></td></tr>
+  <tr><td>Docker Desktop</td><td>latest</td><td>Kafka, Redis, later the full stack</td></tr>
+  <tr><td>Postman / curl</td><td>&mdash;</td><td>API calls</td></tr>
+  <tr><td>Git</td><td>&mdash;</td><td></td></tr>
+</table>
+<h3>4.2 First run</h3>
+<pre class="code">git clone &lt;repo-url&gt; Enterprise-Digital-Banking-System
+git clone &lt;repo-url&gt; notification-service           # sibling folder
+
+# environment (IntelliJ: Run &gt; Edit Configurations &gt; Environment variables)
+DB_PASSWORD=&lt;mysql password&gt;
+JWT_SECRET=&lt;output of: openssl rand -base64 48&gt;
+
+cd notification-service &amp;&amp; docker compose up -d      # Kafka on localhost:9092
+cd ../Enterprise-Digital-Banking-System
+./mvnw spring-boot:run                               # http://localhost:8080
+./mvnw test                                          # see doc 06 - fix compile errors first</pre>
+<p>Then follow the quick-start script in document 04 &sect;11 to register, log in and make a transfer.</p>
+
+<h3>4.3 Adding a new feature module (checklist)</h3>
+<ol>
+  <li>Create package <code>&lt;feature&gt;/</code> with <code>entity</code>, <code>repository</code>, <code>dto/request</code>, <code>dto/response</code>, <code>mapper</code>, <code>service</code> + <code>service/impl</code>, <code>controller</code>.</li>
+  <li>Entity: <code>@Entity @Table(name = "plural_snake")</code>, Lombok builder, <code>@ManyToOne(fetch = LAZY)</code> to parents, <code>@Enumerated(STRING)</code>, money <code>precision = 18, scale = 2</code>, <code>@PrePersist</code> for <code>createdAt</code> and default status.</li>
+  <li>Request DTOs with Bean Validation and clear messages; response DTOs never expose entities or sensitive fields.</li>
+  <li>Service interface + <code>@Service @RequiredArgsConstructor @Transactional</code> impl; <code>readOnly = true</code> on queries; throw <code>ResourceNotFoundException</code> / <code>BadRequestException</code>.</li>
+  <li>Call <code>auditService.log(...)</code> on every state change.</li>
+  <li>Never inject another module&rsquo;s service if it already depends on yours &mdash; use its repository (ADR-005).</li>
+  <li>Controller under <code>/api/v1/&lt;plural&gt;</code>; 201 for create, 204 for delete.</li>
+  <li>Add a Flyway migration (once Flyway is in), unit tests for every branch, and update documents 02 and 04.</li>
+</ol>
+
+<h3>4.4 Coding conventions</h3>
+<table>
+  <tr><th>Topic</th><th>Convention</th></tr>
+  <tr><td>Injection</td><td>Constructor injection via <code>@RequiredArgsConstructor</code> and <code>final</code> fields</td></tr>
+  <tr><td>Naming</td><td><code>XxxController</code>, <code>XxxService</code> / <code>XxxServiceImpl</code>, <code>XxxRepository</code>, <code>XxxMapper</code>, <code>CreateXxxRequest</code>, <code>XxxResponse</code></td></tr>
+  <tr><td>Exceptions</td><td>Domain exceptions only; mapping to HTTP lives in <code>GlobalExceptionHandler</code></td></tr>
+  <tr><td>Tests</td><td><code>method_condition_expectedResult</code>, e.g. <code>withdraw_insufficientBalance_throwsBadRequestException</code></td></tr>
+  <tr><td>Commits</td><td>Imperative, describe the change (&ldquo;Add EMI payment endpoint&rdquo;); one logical change per commit</td></tr>
+  <tr><td>Branching</td><td>Feature branches &rarr; pull request &rarr; <code>master</code> with green CI</td></tr>
+</table>
+
+<h2>5. Known Limitations</h2>
+<table>
+  <tr><th>#</th><th>Limitation</th><th>Impact</th><th>Planned fix</th></tr>
+  <tr><td>L-01</td><td><b>Test sources do not compile</b> since Kafka producers were added to service constructors</td><td><code>./mvnw test</code> fails</td><td>Add producer mocks to 3 test classes (doc 06 &sect;1)</td></tr>
+  <tr><td>L-02</td><td>No role-based authorization or ownership checks</td><td>Any logged-in user can approve loans, read others&rsquo; accounts and audit logs (IDOR)</td><td><code>@PreAuthorize</code> + ownership service (doc 05 &sect;3)</td></tr>
+  <tr><td>L-03</td><td>Paying an EMI does not debit any account</td><td>Loans can be closed without repayment</td><td>Debit via TransactionService + ledger + audit</td></tr>
+  <tr><td>L-04</td><td>No overdue EMI detection</td><td>OVERDUE never set</td><td><code>@Scheduled</code> daily job</td></tr>
+  <tr><td>L-05</td><td>Loan / EMI / customer actions are not audited</td><td>Incomplete trail</td><td>Add <code>auditService.log</code> calls</td></tr>
+  <tr><td>L-06</td><td>Kafka event published before DB commit, fire-and-forget</td><td>Possible notification for a rolled-back transfer; lost events if broker is down</td><td>Transactional outbox / <code>AFTER_COMMIT</code> listener</td></tr>
+  <tr><td>L-07</td><td>Deposits and withdrawals emit no event</td><td>No notification for them</td><td>Publish <code>transaction.completed</code> for all types</td></tr>
+  <tr><td>L-08</td><td>Account opening does not require verified KYC</td><td>Compliance gap</td><td>Check <code>kycStatus == VERIFIED</code></td></tr>
+  <tr><td>L-09</td><td>No token revocation / refresh; 24 h tokens; user status not checked at login</td><td>Blocked users keep access</td><td>Refresh tokens, status check, deny-list</td></tr>
+  <tr><td>L-10</td><td>No rate limiting</td><td>Brute-force on login</td><td>Nginx + RateLimitFilter (roadmap 09)</td></tr>
+  <tr><td>L-11</td><td>Optimistic-lock conflicts and malformed JSON return 500</td><td>Misleading status</td><td>Handlers mapping to 409 / 400</td></tr>
+  <tr><td>L-12</td><td>List endpoints are unpaged</td><td>Slow at scale</td><td>Pageable (roadmap 06)</td></tr>
+  <tr><td>L-13</td><td>Schema managed by <code>ddl-auto=update</code></td><td>Unreviewed schema changes</td><td>Flyway (roadmap 04)</td></tr>
+  <tr><td>L-14</td><td>Customer delete is a hard delete and fails with children</td><td>500 error</td><td>Soft delete / 409</td></tr>
+  <tr><td>L-15</td><td>Last EMI is not adjusted for rounding</td><td>Total repaid may differ from exact amortisation by a few paise</td><td>Compute final installment as remaining balance</td></tr>
+  <tr><td>L-16</td><td>Card module is an empty skeleton; <code>CreateEmiRequest</code>, <code>AuthResponse</code>, <code>TokenResponse</code> are empty classes</td><td>Dead code</td><td>Implement or delete</td></tr>
+  <tr><td>L-17</td><td><code>lastLogin</code>, <code>emailVerified</code>, <code>phoneVerified</code> are never updated</td><td>Unused fields</td><td>Update on login / verification flows</td></tr>
+  <tr><td>L-18</td><td>SMTP credentials deliberately not configured</td><td>E-mail notifications end in FAILED</td><td>Set <code>MAIL_USERNAME</code> / <code>MAIL_PASSWORD</code> (Gmail app password)</td></tr>
+</table>
+
+<h2>6. Roadmap</h2>
+<table>
+  <tr><th>Step</th><th>Reference doc</th><th>Deliverable</th></tr>
+  <tr><td>0</td><td>&mdash;</td><td>Fix test compilation; close loan/EMI gaps (L-03, L-04, L-05)</td></tr>
+  <tr><td>1</td><td>roadmap-refs/01-redis</td><td>Redis cache on account reads with eviction on every write path</td></tr>
+  <tr><td>2</td><td>roadmap-refs/02-kafka-live-and-advanced</td><td>Run Kafka end-to-end; dead-letter topics; consumer groups; lag monitoring</td></tr>
+  <tr><td>3</td><td>roadmap-refs/03-logging-monitoring</td><td>Logback config, Actuator, Prometheus, Grafana</td></tr>
+  <tr><td>4</td><td>roadmap-refs/04-docker-deployment-infra</td><td>Dockerfile, full docker-compose, dev/prod profiles, Flyway, indexes</td></tr>
+  <tr><td>5</td><td>roadmap-refs/05-testing</td><td>Service, repository, controller and integration tests</td></tr>
+  <tr><td>6</td><td>roadmap-refs/06-pagination-sorting-search-swagger</td><td>Pageable history, customer search, Swagger UI</td></tr>
+  <tr><td>7</td><td>roadmap-refs/07-security-performance</td><td>Security checklist, optimistic-lock test, N+1 review</td></tr>
+  <tr><td>8</td><td>roadmap-refs/09-reverse-proxy-rate-limiting</td><td>Nginx edge + rate limiting (optional)</td></tr>
+  <tr><td>9</td><td>roadmap-refs/08-deployment-and-wrapup</td><td>Production build, AWS Elastic Beanstalk + RDS, README, final review</td></tr>
+  <tr><td>Later</td><td>&mdash;</td><td>Role-based authorization, refresh tokens, cards module, transactional outbox</td></tr>
+</table>
+
+<h2>7. Changelog</h2>
+<p>Derived from the git history of <code>master</code> (64 commits). Dates are commit dates.</p>
+<table>
+  <tr><th>Date</th><th>Version</th><th>Changes</th></tr>
+  <tr><td>2026-10-13</td><td>0.9</td><td>EMI module completed: entity, repository, schedule generation, payment, loan auto-close, EmiController. Documentation set (this folder) added.</td></tr>
+  <tr><td>2026-10-09 &ndash; 10-12</td><td>0.8</td><td>Loan module: entity, types/status, EMI formula, apply/approve/reject endpoints; error fixes; README update.</td></tr>
+  <tr><td>2026-10-05 &ndash; 10-06</td><td>0.7</td><td>Embedded notification module removed in favour of notification-service. Kafka producer config, <code>TransactionCompletedEvent</code>, <code>BeneficiaryActivatedEvent</code>, producers wired into transfer and beneficiary activation.</td></tr>
+  <tr><td>2026-09-09 &ndash; 09-13</td><td>0.6</td><td>Beneficiary module (CRUD, activation, audit) with unit tests; transfers via beneficiary; Notification/Card/Loan packages scaffolded.</td></tr>
+  <tr><td>2026-08-31 &ndash; 09-01</td><td>0.5</td><td>Double-entry ledger; transaction and ledger unit tests; AuditLog entity, service, controller.</td></tr>
+  <tr><td>2026-08-20 &ndash; 08-26</td><td>0.4</td><td>Account APIs (create, update, freeze, close); Transaction entity, deposit/withdraw/transfer service and controller; refactoring.</td></tr>
+  <tr><td>2026-07-30 &ndash; 08-20</td><td>0.3</td><td>Customer module: DTOs, repository, service, controller, KYC.</td></tr>
+  <tr><td>2026-07-23 &ndash; 07-28</td><td>0.2.1</td><td>Custom exceptions and GlobalExceptionHandler.</td></tr>
+  <tr><td>2026-07-05 &ndash; 07-22</td><td>0.2</td><td>User entity, register/login DTOs and logic, BCrypt encoder, SecurityFilterChain, JwtUtil, JwtAuthenticationFilter, entry point.</td></tr>
+  <tr><td>2026-06-24 &ndash; 06-28</td><td>0.1</td><td>Project created; README and architecture diagram; first Account entity.</td></tr>
+</table>
+<div class="note">Going forward, keep a <code>CHANGELOG.md</code> in the repository root using the <i>Keep a Changelog</i> format (Added / Changed / Fixed / Removed per version) and tag releases (<code>git tag v1.0.0</code>).</div>
+
+<h2>8. Maintaining This Documentation</h2>
+<ul>
+  <li>Sources: <code>docs/whole-documentation/source/content/*.html</code> (one file per PDF), shared look in <code>source/template.html</code>, diagrams written in Mermaid inside the HTML.</li>
+  <li>Rebuild all PDFs: <code>python docs/whole-documentation/source/build.py</code>; rebuild one: <code>python docs/whole-documentation/source/build.py 04</code>. Requires Chrome or Edge; Mermaid is bundled locally (works offline).</li>
+  <li>When a <span class="badge planned">PLANNED</span> item is implemented, change its badge to <span class="badge built">BUILT</span> and update the affected sections.</li>
+  <li>Update docs 02 (schema) and 04 (API) in the same commit as the code change.</li>
+</ul>

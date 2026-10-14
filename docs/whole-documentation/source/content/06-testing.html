@@ -1,0 +1,251 @@
+<!-- title: Testing Documentation | subtitle: Test strategy and plan, test cases, unit / repository / controller / integration / API tests, coverage and performance testing. | out: 06-Testing-Documentation.pdf -->
+
+<h2>1. Current State</h2>
+<div class="warn"><b>Status on 13 Oct 2026: the test sources do not compile.</b> After the Kafka producers were added, <code>TransactionServiceImpl</code> takes a 7th constructor argument (<code>TransactionEventProducer</code>) and <code>BeneficiaryServiceImpl</code> a 6th (<code>BeneficiaryEventProducer</code>). Three test classes still call the old constructors:
+<ul>
+  <li><code>TransactionServiceImplTest.java:67</code></li>
+  <li><code>AccountingLogicTest.java:65</code></li>
+  <li><code>BeneficiaryServiceImplTest.java:58</code></li>
+</ul>
+<b>Fix:</b> add <code>@Mock TransactionEventProducer transactionEventProducer;</code> / <code>@Mock BeneficiaryEventProducer beneficiaryEventProducer;</code> and pass it as the last constructor argument. Then add a <code>verify(...).publish(any())</code> assertion to the transfer and activate success tests.</div>
+
+<table>
+  <tr><th>Test class</th><th>Type</th><th>Tests</th><th>Status</th></tr>
+  <tr><td><code>TransactionServiceImplTest</code></td><td>Unit (Mockito)</td><td>15</td><td><span class="badge gap">DOES NOT COMPILE</span></td></tr>
+  <tr><td><code>BeneficiaryServiceImplTest</code></td><td>Unit (Mockito)</td><td>15</td><td><span class="badge gap">DOES NOT COMPILE</span></td></tr>
+  <tr><td><code>AccountingLogicTest</code></td><td>Unit &mdash; ledger invariants with real <code>LedgerServiceImpl</code></td><td>2</td><td><span class="badge gap">DOES NOT COMPILE</span></td></tr>
+  <tr><td><code>LedgerServiceImplTest</code></td><td>Unit (Mockito)</td><td>5</td><td>Compiles; passed on its last run, but <code>./mvnw test</code> cannot run it until the other three compile</td></tr>
+  <tr><td><code>EnterpriseDigitalBankingSystemApplicationTests</code></td><td><code>@SpringBootTest</code> context load</td><td>1</td><td>Needs running MySQL + env vars; fails in isolation</td></tr>
+  <tr><td colspan="2"><b>Total</b></td><td><b>38</b></td><td></td></tr>
+</table>
+<p>notification-service has its own suite (7 classes): <code>NotificationServiceTest</code>, <code>NotificationEngineTest</code>, <code>NotificationChannelResolverTest</code>, <code>NotificationDecoratorTest</code>, <code>NotificationEventPublisherTest</code>, <code>ExponentialBackoffRetryPolicyTest</code>, <code>JpaNotificationRepositoryTest</code>.</p>
+
+<h2>2. Test Strategy</h2>
+<div class="figure">
+<pre class="mermaid">
+flowchart TB
+  E2E["API / end-to-end<br/>Postman / Newman collection<br/>few, slow"]
+  INT["Integration<br/>@SpringBootTest + MockMvc + Testcontainers<br/>full flows"]
+  WEB["Controller slice<br/>@WebMvcTest - status codes, validation, JSON"]
+  REPO["Repository slice<br/>@DataJpaTest - queries, constraints"]
+  UNIT["Unit<br/>JUnit 5 + Mockito - every if / throw branch in *ServiceImpl<br/>many, fast"]
+  E2E --- INT --- WEB --- REPO --- UNIT
+</pre>
+<div class="cap">Figure 1 &mdash; Test pyramid: most tests at the bottom</div>
+</div>
+<table>
+  <tr><th>Level</th><th>Tooling</th><th>Scope</th><th>Runs in</th></tr>
+  <tr><td>Unit</td><td>JUnit 5, Mockito (<code>@ExtendWith(MockitoExtension.class)</code>), AssertJ</td><td>One service class; collaborators mocked</td><td>ms, no Spring</td></tr>
+  <tr><td>Repository</td><td><code>@DataJpaTest</code>, H2 (test scope) or Testcontainers MySQL</td><td>Derived queries, unique / FK constraints, <code>@Version</code></td><td>seconds</td></tr>
+  <tr><td>Controller</td><td><code>@WebMvcTest</code>, MockMvc, <code>@MockitoBean</code> services, <code>@AutoConfigureMockMvc(addFilters = false)</code> or a test JWT</td><td>URL mapping, validation &rarr; 400, exception handler &rarr; JSON</td><td>seconds</td></tr>
+  <tr><td>Integration</td><td><code>@SpringBootTest(RANDOM_PORT)</code>, MockMvc, Testcontainers (MySQL, Kafka), <code>@EmbeddedKafka</code></td><td>Register &rarr; login &rarr; &hellip; full business flows, security filter</td><td>tens of seconds</td></tr>
+  <tr><td>API / E2E</td><td>Postman collection + Newman in CI</td><td>Deployed app over HTTP</td><td>minutes</td></tr>
+  <tr><td>Performance</td><td>k6 or JMeter</td><td>Throughput, latency, concurrency</td><td>on demand</td></tr>
+</table>
+<h3>2.1 Priorities</h3>
+<ol>
+  <li>Fix compilation (section 1).</li>
+  <li>Unit tests for the newest, least-proven logic: <code>LoanServiceImpl</code>, <code>EmiServiceImpl</code>.</li>
+  <li><code>AccountServiceImpl</code>, <code>CustomerServiceImpl</code>, <code>UserServiceImpl</code>.</li>
+  <li>Repository tests for custom queries; optimistic-locking test.</li>
+  <li>Controller tests for status codes; one integration test per major flow.</li>
+</ol>
+<p>Coverage targets (JaCoCo): service layer &ge; 85 % line / 75 % branch; overall &ge; 70 %. Do not chase 100 % on mappers/DTOs.</p>
+
+<h2>3. Test Plan</h2>
+<table>
+  <tr><th>Item</th><th>Plan</th></tr>
+  <tr><td>Objective</td><td>Prove money is never created or lost, business rules are enforced, and every API returns the documented status codes</td></tr>
+  <tr><td>In scope</td><td>All services and endpoints of banking-app; Kafka publishing; notification consumption</td></tr>
+  <tr><td>Out of scope</td><td>Real SMTP delivery, AWS infrastructure</td></tr>
+  <tr><td>Entry criteria</td><td>Code compiles; <code>./mvnw test-compile</code> green</td></tr>
+  <tr><td>Exit criteria</td><td>All tests green, coverage targets met, no open high-severity defects, manual smoke test of section 7 passed</td></tr>
+  <tr><td>Test data</td><td>Builders in test classes (<code>Account.builder()...</code>); integration tests create their own users via the API; no shared fixtures</td></tr>
+  <tr><td>Environment</td><td>Local JDK 17; Docker for Testcontainers; CI on GitHub Actions</td></tr>
+  <tr><td>Commands</td><td><code>./mvnw test</code> &middot; <code>./mvnw test -Dtest=LoanServiceImplTest</code> &middot; <code>./mvnw verify</code> (+ JaCoCo report in <code>target/site/jacoco/index.html</code>)</td></tr>
+  <tr><td>Reports</td><td><code>target/surefire-reports/*.txt</code>, JaCoCo HTML</td></tr>
+  <tr><td>Defect handling</td><td>GitHub issue per defect with steps, expected/actual; write a failing test first, then fix</td></tr>
+</table>
+
+<h2>4. Test Cases &mdash; Existing</h2>
+<h3>4.1 TransactionServiceImplTest</h3>
+<table>
+  <tr><th>Test</th><th>Verifies</th></tr>
+  <tr><td>deposit_success_creditsAccountAndRecordsLedgerEntry</td><td>Balance increases; ledger recorded</td></tr>
+  <tr><td>deposit_accountNotFound_throwsResourceNotFoundException</td><td>404 path</td></tr>
+  <tr><td>deposit_frozenAccount_throwsBadRequestExceptionAndSkipsLedger</td><td>Status check; no ledger write</td></tr>
+  <tr><td>withdraw_success_debitsAccountAndRecordsLedgerEntry</td><td>Balance decreases; ledger</td></tr>
+  <tr><td>withdraw_insufficientBalance_throwsBadRequestExceptionAndSkipsLedger</td><td>Balance guard</td></tr>
+  <tr><td>transfer_success_movesFundsAndRecordsDoubleEntry</td><td>Both balances; ledger</td></tr>
+  <tr><td>transfer_sameSourceAndDestination_throwsBadRequestException</td><td>Self-transfer guard</td></tr>
+  <tr><td>transfer_insufficientBalance_throwsBadRequestExceptionAndLeavesBalancesUntouched</td><td>No partial update</td></tr>
+  <tr><td>transfer_closedDestinationAccount_throwsBadRequestException</td><td>Destination status</td></tr>
+  <tr><td>transfer_viaActiveBeneficiary_movesFundsToBeneficiaryAccount</td><td>Beneficiary resolution</td></tr>
+  <tr><td>transfer_withBothDestinationAccountIdAndBeneficiaryId_throwsBadRequestException</td><td>Exactly-one rule</td></tr>
+  <tr><td>transfer_withNeitherDestinationAccountIdNorBeneficiaryId_throwsBadRequestException</td><td>Exactly-one rule</td></tr>
+  <tr><td>transfer_viaPendingBeneficiary_throwsBadRequestException</td><td>Beneficiary must be ACTIVE</td></tr>
+  <tr><td>transfer_viaBeneficiaryOwnedByAnotherCustomer_throwsBadRequestException</td><td>Ownership</td></tr>
+  <tr><td>transfer_beneficiaryNotFound_throwsResourceNotFoundException</td><td>404 path</td></tr>
+</table>
+<h3>4.2 LedgerServiceImplTest and AccountingLogicTest</h3>
+<table>
+  <tr><th>Test</th><th>Verifies</th></tr>
+  <tr><td>recordTransactionEntries_deposit_createsSingleCreditEntry</td><td>1 CREDIT</td></tr>
+  <tr><td>recordTransactionEntries_withdrawal_createsSingleDebitEntry</td><td>1 DEBIT</td></tr>
+  <tr><td>recordTransactionEntries_transfer_createsBalancedDebitAndCreditEntries</td><td>DEBIT + CREDIT of equal amount</td></tr>
+  <tr><td>getLedgerByAccount_returnsMappedResponses</td><td>Mapping</td></tr>
+  <tr><td>getLedgerByTransaction_whenNoEntriesFound_throwsResourceNotFoundException</td><td>404 path</td></tr>
+  <tr><td>transfer_producesBalancedDoubleEntry_debitsEqualCredits</td><td>&Sigma; debits = &Sigma; credits</td></tr>
+  <tr><td>deposit_thenWithdrawal_netLedgerMovementMatchesFinalBalance</td><td>Ledger reconciles to balance</td></tr>
+</table>
+<h3>4.3 BeneficiaryServiceImplTest</h3>
+<p>add (valid, customer missing, account missing, duplicate) &middot; getById (found, not found) &middot; getByCustomer (exists, missing) &middot; update (found, not found) &middot; activate (pending, already active, not found) &middot; delete (found, not found) &mdash; 15 tests.</p>
+
+<h2>5. Test Cases &mdash; Planned</h2>
+<h3>5.1 LoanServiceImplTest / EmiServiceImplTest</h3>
+<table>
+  <tr><th>ID</th><th>Scenario</th><th>Expected</th></tr>
+  <tr><td>LN-01</td><td>Apply: 100 000 at 12 % for 12 months</td><td>emiAmount = 8884.88, status PENDING</td></tr>
+  <tr><td>LN-02</td><td>Apply: unknown customer / account</td><td>ResourceNotFoundException</td></tr>
+  <tr><td>LN-03</td><td>Approve PENDING loan</td><td>account balance + principal; status ACTIVE; approvedAt set; <code>emiService.generateSchedule</code> called once</td></tr>
+  <tr><td>LN-04</td><td>Approve ACTIVE / REJECTED / CLOSED loan</td><td>BadRequestException; balance unchanged; no schedule</td></tr>
+  <tr><td>LN-05</td><td>Reject PENDING loan</td><td>REJECTED; no disbursement</td></tr>
+  <tr><td>LN-06</td><td>Reject non-PENDING</td><td>BadRequestException</td></tr>
+  <tr><td>LN-07</td><td>getLoansByCustomerId for unknown customer</td><td>ResourceNotFoundException</td></tr>
+  <tr><td>EMI-01</td><td>generateSchedule tenure 12</td><td>12 rows, installments 1..12, due dates +1..+12 months, all PENDING, amount = emiAmount</td></tr>
+  <tr><td>EMI-02</td><td>Pay PENDING EMI with others unpaid</td><td>PAID, paidAt set, loan stays ACTIVE</td></tr>
+  <tr><td>EMI-03</td><td>Pay last unpaid EMI</td><td>Loan CLOSED, closedAt set</td></tr>
+  <tr><td>EMI-04</td><td>Pay already-PAID EMI</td><td>BadRequestException</td></tr>
+  <tr><td>EMI-05</td><td>Pay unknown EMI</td><td>ResourceNotFoundException</td></tr>
+  <tr><td>EMI-06</td><td>Pay EMI of a CLOSED/REJECTED loan</td><td>BadRequestException (rule to add)</td></tr>
+</table>
+<h3>5.2 AccountServiceImplTest</h3>
+<table>
+  <tr><th>ID</th><th>Scenario</th><th>Expected</th></tr>
+  <tr><td>AC-01</td><td>Create for existing customer</td><td>Account number matches <code>^10\d{10}$</code>; ACTIVE; holder name = customer name; audit CREATE</td></tr>
+  <tr><td>AC-02</td><td>Generated number collides once</td><td>Regenerated (existsByAccountNumber true then false)</td></tr>
+  <tr><td>AC-03</td><td>Freeze already FROZEN</td><td>BadRequestException</td></tr>
+  <tr><td>AC-04</td><td>Close with non-zero balance</td><td>BadRequestException</td></tr>
+  <tr><td>AC-05</td><td>Update / freeze / close a CLOSED account</td><td>BadRequestException</td></tr>
+  <tr><td>AC-06</td><td>Close with zero balance</td><td>CLOSED; audit old/new status</td></tr>
+</table>
+<h3>5.3 CustomerServiceImplTest and UserServiceImplTest</h3>
+<table>
+  <tr><th>ID</th><th>Scenario</th><th>Expected</th></tr>
+  <tr><td>CU-01</td><td>Create with unknown e-mail</td><td>UserNotFoundException</td></tr>
+  <tr><td>CU-02</td><td>Second profile for same user / duplicate phone</td><td>UserAlreadyExistsException</td></tr>
+  <tr><td>CU-03</td><td>KYC with PAN used by another customer</td><td>UserAlreadyExistsException</td></tr>
+  <tr><td>CU-04</td><td>KYC success</td><td>VERIFIED; user.kycVerified = true</td></tr>
+  <tr><td>CU-05</td><td>Update keeping own phone number</td><td>Allowed (filter excludes self)</td></tr>
+  <tr><td>US-01</td><td>Register duplicate e-mail</td><td>UserAlreadyExistsException</td></tr>
+  <tr><td>US-02</td><td>Register password mismatch</td><td>InvalidCredentialsException</td></tr>
+  <tr><td>US-03</td><td>Register success</td><td>Password stored encoded; role CUSTOMER; audit CREATE</td></tr>
+  <tr><td>US-04</td><td>Login wrong password / unknown e-mail</td><td>Exception + LOGIN_FAILED audit</td></tr>
+  <tr><td>US-05</td><td>Login success</td><td>Token returned; JwtUtil.extractEmail(token) = e-mail</td></tr>
+</table>
+<h3>5.4 Repository, controller and concurrency tests</h3>
+<table>
+  <tr><th>ID</th><th>Test</th><th>Expected</th></tr>
+  <tr><td>RP-01</td><td><code>LoanRepository.findByCustomerId</code></td><td>Only that customer&rsquo;s loans</td></tr>
+  <tr><td>RP-02</td><td><code>EmiRepository.findByLoanIdOrderByInstallmentNumberAsc</code></td><td>Ascending order</td></tr>
+  <tr><td>RP-03</td><td><code>TransactionRepository.findBySourceAccountIdOrDestinationAccountIdOrderByCreatedAtDesc</code></td><td>Both directions, newest first</td></tr>
+  <tr><td>RP-04</td><td>Duplicate <code>account_number</code> insert</td><td><code>DataIntegrityViolationException</code></td></tr>
+  <tr><td>RP-05</td><td>Optimistic lock: two copies of the same account saved</td><td>Second <code>saveAndFlush</code> throws <code>ObjectOptimisticLockingFailureException</code></td></tr>
+  <tr><td>WC-01</td><td><code>POST /api/v1/loans</code> valid body</td><td>201</td></tr>
+  <tr><td>WC-02</td><td><code>POST /api/v1/transactions/deposit</code> amount 0</td><td>400, error contains &ldquo;amount:&rdquo;</td></tr>
+  <tr><td>WC-03</td><td>Service throws ResourceNotFoundException</td><td>404 JSON with path</td></tr>
+  <tr><td>WC-04</td><td>Protected endpoint without token (filters on)</td><td>401 &ldquo;Authentication required&hellip;&rdquo;</td></tr>
+</table>
+<pre class="code">@ExtendWith(MockitoExtension.class)
+class LoanServiceImplTest {
+    @Mock LoanRepository loanRepository;      @Mock CustomerRepository customerRepository;
+    @Mock AccountRepository accountRepository; @Mock EmiService emiService;
+    @Spy  LoanMapper loanMapper = new LoanMapper();
+    @InjectMocks LoanServiceImpl loanService;
+
+    @Test
+    void approveLoan_whenPending_disbursesAndGeneratesSchedule() {
+        Account acc = Account.builder().id(1L).accountNumber("1000000001").balance(new BigDecimal("500.00")).build();
+        Loan loan = Loan.builder().id(9L).customer(Customer.builder().id(1L).build()).disbursementAccount(acc)
+                .principalAmount(new BigDecimal("10000.00")).status(LoanStatus.PENDING).build();
+        when(loanRepository.findById(9L)).thenReturn(Optional.of(loan));
+        when(loanRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        LoanResponse res = loanService.approveLoan(9L);
+
+        assertThat(res.getStatus()).isEqualTo(LoanStatus.ACTIVE);
+        assertThat(acc.getBalance()).isEqualByComparingTo("10500.00");
+        verify(emiService).generateSchedule(loan);
+    }
+}</pre>
+
+<h2>6. Integration and API Tests</h2>
+<h3>6.1 Integration flows <span class="badge planned">PLANNED</span></h3>
+<table>
+  <tr><th>ID</th><th>Flow</th><th>Assertions</th></tr>
+  <tr><td>IT-01</td><td>Register &rarr; login &rarr; create customer &rarr; KYC &rarr; open 2 accounts &rarr; transfer</td><td>Balances, 2 ledger rows, audit rows, 200s</td></tr>
+  <tr><td>IT-02</td><td>Apply loan &rarr; approve &rarr; list EMIs &rarr; pay all</td><td>N EMIs; loan CLOSED after last payment</td></tr>
+  <tr><td>IT-03</td><td>Add beneficiary &rarr; transfer (PENDING) fails &rarr; activate &rarr; transfer succeeds</td><td>400 then 200; event on <code>beneficiary.activated</code> (<code>@EmbeddedKafka</code> consumer)</td></tr>
+  <tr><td>IT-04</td><td>Call any <code>/api/v1/**</code> without / with expired token</td><td>401 JSON</td></tr>
+  <tr><td>IT-05</td><td>Kafka broker down during transfer</td><td>Transfer still 200 (fire-and-forget)</td></tr>
+  <tr><td>IT-06</td><td>Redis cache: GET account twice, deposit, GET again</td><td>Second GET no SQL; after deposit new balance returned</td></tr>
+</table>
+<h3>6.2 API test collection</h3>
+<p>A Postman collection mirroring document 04 &sect;11 (quick-start) with tests per request (<code>pm.response.to.have.status(201)</code>, save <code>token</code>, <code>accountId</code> into collection variables). Run in CI with <code>newman run banking.postman_collection.json -e local.json</code> <span class="badge planned">PLANNED</span>.</p>
+
+<h3>6.3 Manual cross-service test (Kafka live)</h3>
+<ol>
+  <li>Start Kafka (<code>docker compose up -d</code> in notification-service), banking-app (8080), notification-service (8081).</li>
+  <li>Register, log in, create a customer and two accounts, POST a transfer.</li>
+  <li>notification-service log shows the <code>transaction.completed</code> event consumed.</li>
+  <li><code>GET :8081/api/v1/notifications?userId=&lt;uuid&gt;</code> &rarr; a row with status SENT (or FAILED while SMTP credentials are unset &mdash; expected).</li>
+  <li>Repeat with <code>PATCH /beneficiaries/{id}/activate</code> for <code>beneficiary.activated</code>.</li>
+</ol>
+
+<h2>7. Coverage</h2>
+<pre class="code">&lt;!-- pom.xml (planned) --&gt;
+&lt;plugin&gt;
+  &lt;groupId&gt;org.jacoco&lt;/groupId&gt;&lt;artifactId&gt;jacoco-maven-plugin&lt;/artifactId&gt;&lt;version&gt;0.8.12&lt;/version&gt;
+  &lt;executions&gt;
+    &lt;execution&gt;&lt;goals&gt;&lt;goal&gt;prepare-agent&lt;/goal&gt;&lt;/goals&gt;&lt;/execution&gt;
+    &lt;execution&gt;&lt;id&gt;report&lt;/id&gt;&lt;phase&gt;verify&lt;/phase&gt;&lt;goals&gt;&lt;goal&gt;report&lt;/goal&gt;&lt;/goals&gt;&lt;/execution&gt;
+  &lt;/executions&gt;
+&lt;/plugin&gt;</pre>
+<table>
+  <tr><th>Package</th><th>Covered today (by design of existing tests)</th><th>Target</th></tr>
+  <tr><td>transaction.service</td><td>All branches of deposit / withdraw / transfer (once compiling)</td><td>&ge; 90 %</td></tr>
+  <tr><td>ledger.service</td><td>All entry types</td><td>&ge; 90 %</td></tr>
+  <tr><td>beneficiary.service</td><td>All public methods, happy + error paths</td><td>&ge; 90 %</td></tr>
+  <tr><td>loan.service, emi.service</td><td>none</td><td>&ge; 85 %</td></tr>
+  <tr><td>account.service, customer.service, auth.service</td><td>none</td><td>&ge; 80 %</td></tr>
+  <tr><td>security, exception</td><td>none</td><td>&ge; 70 % via controller/integration tests</td></tr>
+</table>
+<p>Coverage percentages are produced by JaCoCo once the plugin is added; this document will be updated with measured numbers.</p>
+
+<h2>8. Performance Testing</h2>
+<h3>8.1 Goals</h3>
+<table>
+  <tr><th>Scenario</th><th>Load</th><th>Target</th></tr>
+  <tr><td>Login</td><td>20 req/s</td><td>p95 &lt; 300 ms (BCrypt dominates)</td></tr>
+  <tr><td>GET account</td><td>200 req/s</td><td>p95 &lt; 50 ms with Redis</td></tr>
+  <tr><td>Transfer</td><td>50 req/s across 100 accounts</td><td>p95 &lt; 250 ms, 0 % 5xx, balances reconcile</td></tr>
+  <tr><td>Transfer contention</td><td>20 concurrent transfers from the same account</td><td>No lost update; losers receive a conflict; sum of balances unchanged</td></tr>
+  <tr><td>History</td><td>account with 10 000 transactions</td><td>paged response p95 &lt; 100 ms (requires pagination + indexes)</td></tr>
+</table>
+<h3>8.2 k6 script (sketch)</h3>
+<pre class="code">import http from 'k6/http';
+import { check } from 'k6';
+export const options = { vus: 50, duration: '2m', thresholds: { http_req_duration: ['p(95)<250'] } };
+const H = { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${__ENV.TOKEN}` } };
+export default function () {
+  const src = 1 + Math.floor(Math.random() * 50), dst = 51 + Math.floor(Math.random() * 50);
+  const r = http.post('http://localhost:8080/api/v1/transactions/transfer',
+      JSON.stringify({ sourceAccountId: src, destinationAccountId: dst, amount: 1 }), H);
+  check(r, { 'status 200': (x) => x.status === 200 });
+}</pre>
+<h3>8.3 What to watch</h3>
+<ul>
+  <li><b>N+1 queries</b>: with <code>show-sql=true</code>, history of an account with many transactions should not issue one query per row; fix with <code>@EntityGraph</code> / <code>JOIN FETCH</code>.</li>
+  <li><b>HikariCP</b> pending connections (default pool 10).</li>
+  <li>After the run, the reconciliation query in document 07 &sect;9.1 must return no rows and total money across accounts must be unchanged.</li>
+</ul>

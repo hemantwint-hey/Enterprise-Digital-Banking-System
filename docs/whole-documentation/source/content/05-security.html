@@ -1,0 +1,212 @@
+<!-- title: Security Documentation | subtitle: Authentication flow, authorization matrix, sensitive data, threat model, secrets management and audit policy. | out: 05-Security-Documentation.pdf -->
+
+<h2>1. Security Architecture</h2>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  C["Client"] -->|"HTTPS (TLS at Nginx / ALB)"| N["Nginx<br/>per-IP limit_req, 1 MB body limit,<br/>/actuator denied (planned)"]
+  N --> RL["RateLimitFilter<br/>per user / endpoint (planned)"]
+  RL --> JF["JwtAuthenticationFilter<br/>verify HS256 signature + expiry"]
+  JF --> AZ["Authorization<br/>authenticated() today,<br/>role rules (planned)"]
+  AZ --> CT["Controller<br/>@Valid input validation"]
+  CT --> SV["Service<br/>business rules, ownership checks"]
+  SV --> DB[("MySQL<br/>BCrypt hashes,<br/>parameterised SQL")]
+  SV --> AU["AuditService<br/>who / what / IP"]
+</pre>
+<div class="cap">Figure 1 &mdash; Defence in depth: each layer catches what the previous one cannot</div>
+</div>
+<table>
+  <tr><th>Control</th><th>Implementation</th><th>Status</th></tr>
+  <tr><td>Password storage</td><td><code>BCryptPasswordEncoder</code> (salted, cost 10) in <code>SecurityBeansConfig</code></td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Authentication</td><td>Stateless JWT (jjwt 0.12.6, HMAC-SHA256), subject = e-mail</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Session</td><td><code>SessionCreationPolicy.STATELESS</code>; CSRF disabled (no cookies used)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>401 handling</td><td><code>JwtAuthenticationEntryPoint</code> returns JSON <code>ErrorResponse</code></td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Input validation</td><td>Bean Validation on every request DTO (<code>@NotBlank</code>, <code>@Pattern</code>, <code>@DecimalMin</code> &hellip;)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>SQL injection</td><td>Spring Data JPA derived queries only &mdash; parameterised by construction</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Error leakage</td><td>Catch-all handler returns generic 500 message, no stack traces</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Audit trail</td><td><code>AuditService</code> on auth, account, transaction, beneficiary events</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Concurrency</td><td><code>@Version</code> optimistic locking on accounts</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Secrets</td><td>Env vars <code>DB_PASSWORD</code>, <code>JWT_SECRET</code>, <code>MAIL_PASSWORD</code></td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Role-based authorization</td><td><code>@EnableMethodSecurity</code> + <code>@PreAuthorize</code> / URL rules</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Resource ownership</td><td>Customer may only access own accounts, loans, beneficiaries</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Rate limiting</td><td>Nginx + Bucket4j/Redis (doc 09)</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>TLS</td><td>Nginx / AWS ALB with ACM certificate</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Refresh tokens, password reset</td><td>DTOs exist; endpoints pending</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>CORS</td><td><code>CorsConfigurationSource</code> bean with explicit origins (only if a browser frontend is added)</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h2>2. Authentication Flow</h2>
+<div class="figure">
+<pre class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant API as banking-app
+  participant DB as users table
+  U->>API: POST /auth/login {email, password}
+  API->>DB: findByEmail
+  API->>API: BCrypt.matches(password, hash)
+  API->>API: sign JWT {sub: email, iat, exp: iat + 24h} with HMAC-SHA256(JWT_SECRET)
+  API-->>U: {token}
+  U->>API: GET /api/v1/accounts/1  Authorization: Bearer token
+  API->>API: verify signature, read sub, load user, check exp
+  API->>API: SecurityContext = user + authority (role)
+  API-->>U: 200 data
+</pre>
+<div class="cap">Figure 2 &mdash; Login and authenticated call</div>
+</div>
+
+<h3>2.1 Token format</h3>
+<pre class="code">Header : { "alg": "HS256" }
+Payload: { "sub": "hemant@example.com", "iat": 1760366400, "exp": 1760452800 }
+Signature: HMACSHA256(base64url(header) + "." + base64url(payload), JWT_SECRET)</pre>
+<ul>
+  <li><code>JWT_SECRET</code> must be at least 256 bits (32+ random bytes) &mdash; <code>Keys.hmacShaKeyFor</code> rejects shorter keys.</li>
+  <li>Expiry: <code>jwt.expiration</code> ms (default 86 400 000 = 24 h). Target: 15 min access token + 7 day refresh token <span class="badge planned">PLANNED</span>.</li>
+  <li>The token carries no role claim; the role is re-read from the database on every request, so a role change takes effect immediately.</li>
+  <li>Tokens cannot be revoked before expiry <span class="badge gap">GAP</span>. Planned: refresh-token table + deny-list of <code>jti</code> in Redis on logout.</li>
+  <li><code>UserStatus</code> (BLOCKED / SUSPENDED) is not checked at login or in <code>CustomUserDetails.isEnabled()</code> <span class="badge gap">GAP</span>.</li>
+</ul>
+
+<h3>2.2 Password policy</h3>
+<table>
+  <tr><th>Rule</th><th>Current</th><th>Target</th></tr>
+  <tr><td>Minimum length</td><td>8</td><td>10</td></tr>
+  <tr><td>Complexity</td><td>none</td><td>upper, lower, digit, symbol</td></tr>
+  <tr><td>Hashing</td><td>BCrypt cost 10</td><td>BCrypt cost 12</td></tr>
+  <tr><td>Lockout</td><td>none</td><td>5 failed logins &rarr; 15 min lock (via rate limiter + LOGIN_FAILED audit)</td></tr>
+  <tr><td>Login error messages</td><td>distinguish unknown e-mail (404) from wrong password (401) &mdash; allows user enumeration <span class="badge gap">GAP</span></td><td>single generic 401 &ldquo;Invalid email or password&rdquo;</td></tr>
+</table>
+
+<h2>3. Authorization Matrix</h2>
+<p>Target role permissions. <b>Today</b> every authenticated user may call every endpoint; this matrix is to be enforced with <code>@PreAuthorize</code> <span class="badge planned">PLANNED</span>. &ldquo;Own&rdquo; = only resources belonging to the caller&rsquo;s customer profile.</p>
+<table>
+  <tr><th>Endpoint group</th><th>CUSTOMER</th><th>EMPLOYEE</th><th>MANAGER</th><th>ADMIN</th><th>AUDITOR</th></tr>
+  <tr><td>POST /auth/register, /auth/login</td><td>public</td><td>public</td><td>public</td><td>public</td><td>public</td></tr>
+  <tr><td>Customers: create / update</td><td>own</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Customers: list all</td><td>&mdash;</td><td>yes</td><td>yes</td><td>yes</td><td>read</td></tr>
+  <tr><td>Customers: complete KYC</td><td>&mdash;</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Customers: delete</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Accounts: view</td><td>own</td><td>yes</td><td>yes</td><td>yes</td><td>read</td></tr>
+  <tr><td>Accounts: open / update</td><td>&mdash;</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Accounts: freeze / close</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Transactions: deposit</td><td>&mdash;</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Transactions: withdraw / transfer</td><td>own source</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Transactions / ledger: view</td><td>own</td><td>yes</td><td>yes</td><td>yes</td><td>read</td></tr>
+  <tr><td>Beneficiaries: add / rename / delete</td><td>own</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Beneficiaries: activate</td><td>own (after OTP, planned)</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Loans: apply</td><td>own</td><td>yes</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>Loans: approve / reject</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>yes</td><td>&mdash;</td></tr>
+  <tr><td>EMIs: view / pay</td><td>own</td><td>yes</td><td>yes</td><td>yes</td><td>read</td></tr>
+  <tr><td>Audit logs</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>yes</td><td>yes</td></tr>
+  <tr><td>Actuator / metrics</td><td colspan="5">internal network only (Nginx <code>deny all</code>)</td></tr>
+</table>
+<pre class="code">// SecurityConfig (target)
+@EnableMethodSecurity
+...
+.authorizeHttpRequests(auth -> auth
+    .requestMatchers("/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+    .requestMatchers("/api/v1/audit/**").hasAnyAuthority("ADMIN", "AUDITOR")
+    .requestMatchers(HttpMethod.PATCH, "/api/v1/loans/*/approve", "/api/v1/loans/*/reject")
+        .hasAnyAuthority("MANAGER", "ADMIN")
+    .anyRequest().authenticated())
+
+// Ownership check example
+@PreAuthorize("hasAnyAuthority('EMPLOYEE','MANAGER','ADMIN') or @ownership.ownsAccount(#accountId)")
+public AccountResponse getAccountById(Long accountId) { ... }</pre>
+<div class="note">Authorities are the plain role name (<code>new SimpleGrantedAuthority(user.getRole().name())</code>), so rules must use <code>hasAuthority("ADMIN")</code>, not <code>hasRole("ADMIN")</code> (which expects the <code>ROLE_</code> prefix).</div>
+
+<h2>4. Sensitive Data</h2>
+<table>
+  <tr><th>Data</th><th>Location</th><th>Classification</th><th>Protection</th></tr>
+  <tr><td>Password</td><td>users.password</td><td>Secret</td><td>BCrypt hash only; never returned, never logged, never audited</td></tr>
+  <tr><td>JWT</td><td>Client storage, Authorization header</td><td>Secret</td><td>HTTPS only; short expiry; never logged</td></tr>
+  <tr><td>Aadhaar number</td><td>customers.aadhaar_number</td><td>Highly sensitive PII</td><td>Not returned in any response DTO. Target: column encryption (JPA <code>AttributeConverter</code> with AES-GCM) + masked display <code>XXXX-XXXX-1234</code></td></tr>
+  <tr><td>PAN</td><td>customers.pan_number</td><td>Sensitive PII</td><td>Not returned in responses; target: encryption at rest</td></tr>
+  <tr><td>Name, DOB, phone, address, e-mail</td><td>users, customers</td><td>PII</td><td>Access restricted by authorization matrix; e-mail appears in Kafka events (internal network only)</td></tr>
+  <tr><td>Balances, transactions</td><td>accounts, transactions, ledger_entries</td><td>Confidential financial</td><td>Ownership checks (planned); append-only history</td></tr>
+  <tr><td>Client IP</td><td>audit_logs.ip_address</td><td>Personal data</td><td>Audit only</td></tr>
+  <tr><td>Card numbers</td><td>cards (planned)</td><td>PCI DSS</td><td>Never store full PAN/CVV; store token + last 4 digits only</td></tr>
+</table>
+
+<h2>5. Threat Model</h2>
+<p>STRIDE analysis of the main assets (money, credentials, PII) across the trust boundaries: Internet &rarr; edge, edge &rarr; app, app &rarr; data stores, app &rarr; Kafka &rarr; notification-service.</p>
+<table>
+  <tr><th>#</th><th>STRIDE</th><th>Threat</th><th>Mitigation</th><th>Status</th></tr>
+  <tr><td>T1</td><td>Spoofing</td><td>Password brute force / credential stuffing on <code>/auth/login</code></td><td>Nginx 5 req/min per IP + app filter; LOGIN_FAILED audit; lockout</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T2</td><td>Spoofing</td><td>Forged JWT</td><td>HMAC-SHA256 signature with &ge; 256-bit secret from env</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T3</td><td>Spoofing</td><td>Stolen token reused</td><td>HTTPS; short expiry + refresh tokens; revocation list</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T4</td><td>Tampering</td><td>Amount / account id manipulated in request</td><td>Server-side validation, balance checks, account status checks</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T5</td><td>Tampering</td><td>Lost update / double spend through concurrent requests</td><td><code>@Version</code> optimistic locking; single DB transaction per operation</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T6</td><td>Tampering</td><td>SQL injection</td><td>JPA parameter binding; no native string SQL</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T7</td><td>Repudiation</td><td>User denies making a transfer</td><td>Audit log with user, IP, timestamp; immutable ledger</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T8</td><td>Repudiation</td><td>Spoofed <code>X-Forwarded-For</code> hides real IP in audit</td><td>Nginx overwrites header; <code>server.forward-headers-strategy=native</code>; read <code>getRemoteAddr()</code> only</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T9</td><td>Info disclosure</td><td><b>IDOR</b>: customer reads another customer&rsquo;s account by changing the id</td><td>Ownership checks (section 3)</td><td><span class="badge gap">GAP</span></td></tr>
+  <tr><td>T10</td><td>Info disclosure</td><td>Stack traces / SQL in error responses</td><td>Generic 500 handler</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T11</td><td>Info disclosure</td><td>Secrets committed to git</td><td>Env vars; <code>.env</code> in <code>.gitignore</code>; secret scanning</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T12</td><td>Info disclosure</td><td>User enumeration through different login errors</td><td>Single generic message</td><td><span class="badge gap">GAP</span></td></tr>
+  <tr><td>T13</td><td>Info disclosure</td><td>Actuator endpoints exposed publicly</td><td>Nginx <code>deny all</code> on <code>/actuator/</code></td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T14</td><td>Denial of service</td><td>Request floods / huge bodies</td><td>Nginx rate limits, <code>client_max_body_size 1m</code>, timeouts</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T15</td><td>Denial of service</td><td>Unbounded list endpoints (history, audit)</td><td>Pagination</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>T16</td><td>Elevation of privilege</td><td>Customer approves own loan / reads audit log</td><td>Role-based authorization</td><td><span class="badge gap">GAP</span></td></tr>
+  <tr><td>T17</td><td>Elevation of privilege</td><td>Self-registration as ADMIN</td><td>Register always assigns CUSTOMER; role not accepted from client</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>T18</td><td>Tampering</td><td>Forged Kafka events / duplicate delivery</td><td>Kafka on private network; idempotency key on notification; SASL/TLS on brokers in prod</td><td><span class="badge built">BUILT</span> / <span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h2>6. Secrets Management</h2>
+<table>
+  <tr><th>Secret</th><th>Variable</th><th>Used by</th><th>Default</th></tr>
+  <tr><td>Database password</td><td><code>DB_PASSWORD</code></td><td>both services</td><td>none (required)</td></tr>
+  <tr><td>Database user</td><td><code>DB_USERNAME</code></td><td>both services</td><td><code>root</code></td></tr>
+  <tr><td>JWT signing key</td><td><code>JWT_SECRET</code></td><td>banking-app</td><td>none (required, &ge; 32 bytes)</td></tr>
+  <tr><td>JWT lifetime</td><td><code>JWT_EXPIRATION</code></td><td>banking-app</td><td>86400000</td></tr>
+  <tr><td>SMTP credentials</td><td><code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code></td><td>notification-service</td><td>empty (e-mail delivery deferred)</td></tr>
+  <tr><td>Kafka address</td><td><code>KAFKA_BOOTSTRAP_SERVERS</code></td><td>banking-app</td><td><code>localhost:9092</code></td></tr>
+</table>
+<h3>6.1 Rules</h3>
+<ul>
+  <li>Never put real values in <code>application*.properties</code>, <code>docker-compose.yml</code> or the README; reference <code>${VAR}</code> only.</li>
+  <li>Local: IntelliJ run-configuration env vars or a git-ignored <code>.env</code> file read by Docker Compose.</li>
+  <li>AWS: Elastic Beanstalk environment properties, or AWS Secrets Manager / SSM Parameter Store for rotation.</li>
+  <li>CI: GitHub Actions repository secrets.</li>
+  <li>Generate the JWT secret with <code>openssl rand -base64 48</code>. Rotating it invalidates all issued tokens (users log in again).</li>
+  <li>Verify nothing leaked: <code>git log --all -- .env</code> must be empty. Add <code>.env</code> to <code>.gitignore</code> <span class="badge planned">PLANNED</span>.</li>
+  <li>Gmail SMTP requires an App Password, never the account password.</li>
+</ul>
+
+<h2>7. Audit Policy</h2>
+<h3>7.1 What is audited</h3>
+<table>
+  <tr><th>Event</th><th>Action</th><th>Entity</th><th>Old / new value</th><th>Status</th></tr>
+  <tr><td>User registered</td><td>CREATE</td><td>User</td><td>&ndash; / email</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Login success</td><td>LOGIN</td><td>User</td><td>&ndash;</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Login failed (unknown user / bad password)</td><td>LOGIN_FAILED</td><td>User</td><td>&ndash;</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Account created / updated / frozen / closed</td><td>CREATE / UPDATE</td><td>Account</td><td>status before / after</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Deposit / withdrawal / transfer</td><td>CREATE</td><td>Transaction</td><td>&ndash; / amount, accounts</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Beneficiary added / renamed / activated / removed</td><td>CREATE / UPDATE / DELETE</td><td>Beneficiary</td><td>nickname or status</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Customer created / updated / KYC / deleted</td><td>CREATE / UPDATE / DELETE</td><td>Customer</td><td>KYC status</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Loan applied / approved / rejected; EMI paid</td><td>CREATE / UPDATE</td><td>Loan / Emi</td><td>status</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Logout, password change / reset</td><td>LOGOUT / UPDATE</td><td>User</td><td>&ndash;</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+<h3>7.2 Rules</h3>
+<ul>
+  <li>Written in the same DB transaction as the change: if the business operation rolls back, so does its audit row (no phantom audit entries).</li>
+  <li><b>Never</b> store passwords, tokens, full Aadhaar/PAN or card numbers in <code>old_value</code> / <code>new_value</code>.</li>
+  <li>Audit rows are append-only: no update/delete endpoint exists, and the DB user for the app should eventually have no <code>UPDATE/DELETE</code> grant on <code>audit_logs</code>.</li>
+  <li>Read access: ADMIN and AUDITOR only (planned). Retention &ge; 8 years.</li>
+  <li>Failed-login audits survive the exception that follows them because <code>UserServiceImpl</code> is not transactional &mdash; each <code>AuditService.log</code> call commits on its own. Keep it that way (or use <code>REQUIRES_NEW</code>) if <code>@Transactional</code> is ever added to the login method.</li>
+</ul>
+
+<h2>8. Security Review Checklist</h2>
+<table>
+  <tr><th>Item</th><th>Result</th></tr>
+  <tr><td>CORS</td><td>Not configured; only needed for a browser frontend on another origin</td></tr>
+  <tr><td>JWT expiry</td><td>24 h &mdash; acceptable for a demo; shorten with refresh tokens in production</td></tr>
+  <tr><td>Password policy</td><td>Length only &mdash; simplified, documented</td></tr>
+  <tr><td>Secrets in config</td><td>Pass &mdash; all via env vars</td></tr>
+  <tr><td>Audit log leakage</td><td>Pass &mdash; no passwords logged</td></tr>
+  <tr><td>Error messages</td><td>Pass &mdash; generic 500</td></tr>
+  <tr><td>SQL injection</td><td>Pass &mdash; JPA only</td></tr>
+  <tr><td>Rate limiting</td><td>Gap &mdash; planned (doc 09)</td></tr>
+  <tr><td>Authorization / IDOR</td><td>Gap &mdash; highest priority fix before any real deployment</td></tr>
+  <tr><td>Dependency vulnerabilities</td><td>Planned: OWASP <code>dependency-check-maven</code> or GitHub Dependabot in CI</td></tr>
+</table>

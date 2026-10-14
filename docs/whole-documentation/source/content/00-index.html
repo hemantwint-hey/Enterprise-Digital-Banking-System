@@ -1,0 +1,40 @@
+<!-- title: Documentation Index | subtitle: Start here - what each document in the complete documentation set covers, and the system at a glance. | out: 00-Documentation-Index.pdf | toc: no -->
+
+<h2 class="first">The Documentation Set</h2>
+<table>
+  <tr><th>#</th><th>File</th><th>Contents</th></tr>
+  <tr><td>01</td><td><code>01-Architecture-Documentation.pdf</code></td><td>System overview and actors, system architecture diagram, layered architecture, component diagram, Kafka integration, deployment architecture (Docker Compose, AWS), technology choices, 12 ADRs, quality attributes</td></tr>
+  <tr><td>02</td><td><code>02-Database-Documentation.pdf</code></td><td>ER diagram, relational schema (DDL), data dictionary for every column, enumerations, constraints, indexes, migration history and Flyway plan, retention</td></tr>
+  <tr><td>03</td><td><code>03-Flow-and-Interaction-Diagrams.pdf</code></td><td>DFD levels 0/1/2, sequence diagrams (register, login, JWT filter, transfer, deposit/withdraw, beneficiary + notification, loan, EMI), activity diagrams, state diagrams for account, loan, EMI, beneficiary, KYC, notification</td></tr>
+  <tr><td>04</td><td><code>04-API-Documentation.pdf</code></td><td>Conventions, authentication, every endpoint with request/response examples, Kafka event contracts, error body, status codes, error catalogue, OpenAPI/Swagger setup, cURL quick start</td></tr>
+  <tr><td>05</td><td><code>05-Security-Documentation.pdf</code></td><td>Security architecture, authentication flow and token format, password policy, authorization matrix, sensitive data, STRIDE threat model, secrets management, audit policy, review checklist</td></tr>
+  <tr><td>06</td><td><code>06-Testing-Documentation.pdf</code></td><td>Current test status, strategy and pyramid, test plan, existing and planned test cases, integration and API tests, coverage, performance testing</td></tr>
+  <tr><td>07</td><td><code>07-Deployment-and-Operations.pdf</code></td><td>Environments, local run, Dockerfile, docker-compose, configuration and profiles, CI/CD pipeline, AWS deployment, logging, monitoring, backup and recovery, troubleshooting runbook</td></tr>
+  <tr><td>08</td><td><code>08-Project-and-Maintenance.pdf</code></td><td>Project overview, functional and non-functional requirements, business rules, developer setup guide, conventions, known limitations, roadmap, changelog, how to maintain these docs</td></tr>
+</table>
+
+<h3>Status tags</h3>
+<p>The documents describe the <b>target system</b> (after roadmap items 01&ndash;09) and mark every item:
+<span class="badge built">BUILT</span> in the code today &middot;
+<span class="badge planned">PLANNED</span> designed, not yet implemented &middot;
+<span class="badge gap">GAP</span> known limitation.</p>
+
+<h3>System at a glance</h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  C["Client"] --> N["Nginx (planned)"] --> B["banking-app :8080<br/>auth, customer, account, transaction,<br/>ledger, beneficiary, loan, emi, audit"]
+  B --> M[("MySQL banking_db")]
+  B -.-> R[("Redis (planned)")]
+  B --> K{{"Kafka"}} --> S["notification-service :8081"] --> SM[("notification_db")]
+  S --> E["E-mail / SMS / Push"]
+</pre>
+</div>
+
+<h3>Suggested reading order</h3>
+<ol>
+  <li>New developer: 08 &rarr; 01 &rarr; 02 &rarr; 03 &rarr; 04.</li>
+  <li>API consumer / frontend: 04 &rarr; 05 (section 2).</li>
+  <li>Reviewer / interviewer: 01 (ADRs) &rarr; 03 (transfer flow) &rarr; 05 (threat model).</li>
+  <li>Operator: 07.</li>
+</ol>

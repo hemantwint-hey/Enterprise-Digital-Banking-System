@@ -1,0 +1,318 @@
+<!-- title: Deployment and Operations | subtitle: Running locally, Docker and Docker Compose, environment configuration and profiles, CI/CD pipeline, logging, monitoring, backup and recovery, troubleshooting. | out: 07-Deployment-and-Operations.pdf -->
+
+<h2>1. Environments</h2>
+<table>
+  <tr><th>Environment</th><th>How it runs</th><th>Profile</th><th>Schema</th><th>Status</th></tr>
+  <tr><td>Local (IDE)</td><td><code>./mvnw spring-boot:run</code>; MySQL local; Kafka from notification-service compose file</td><td>default / <code>dev</code></td><td><code>ddl-auto=update</code></td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Local (containers)</td><td><code>docker compose up -d</code> &mdash; full stack</td><td><code>prod</code></td><td>Flyway + <code>validate</code></td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>CI</td><td>GitHub Actions: build + tests</td><td><code>test</code></td><td>H2 / Testcontainers</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Cloud</td><td>AWS Elastic Beanstalk + RDS MySQL</td><td><code>prod</code></td><td>Flyway + <code>validate</code></td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h2>2. Running Locally (today)</h2>
+<h3>2.1 Prerequisites</h3>
+<ul>
+  <li>JDK 17+, Git, Docker Desktop (for Kafka), MySQL 8 running on <code>localhost:3306</code>.</li>
+  <li>Sibling repository <code>notification-service</code> (optional, for notifications).</li>
+</ul>
+<h3>2.2 Steps</h3>
+<pre class="code"># 1. Kafka (single-node KRaft) - compose file lives in notification-service
+cd ../notification-service && docker compose up -d && docker ps      # notification-kafka is Up
+
+# 2. Environment (PowerShell)
+$env:DB_PASSWORD="your-mysql-password"
+$env:JWT_SECRET="at-least-32-random-bytes-base64-encoded-secret-value"
+
+# 3. banking-app (port 8080) - creates banking_db automatically
+cd ../Enterprise-Digital-Banking-System
+./mvnw spring-boot:run
+
+# 4. notification-service (port 8081) - in another terminal
+cd ../notification-service && ./mvnw spring-boot:run
+
+# 5. Smoke test
+curl -X POST http://localhost:8080/auth/register -H "Content-Type: application/json" -d '{...}'</pre>
+
+<h2>3. Docker <span class="badge planned">PLANNED</span></h2>
+<h3>3.1 Dockerfile (multi-stage)</h3>
+<pre class="code"># --- build stage ---
+FROM eclipse-temurin:17-jdk AS build
+WORKDIR /app
+COPY .mvn .mvn
+COPY mvnw pom.xml ./
+RUN ./mvnw -q dependency:go-offline          # cached layer: dependencies
+COPY src src
+RUN ./mvnw -q clean package -DskipTests
+
+# --- run stage ---
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+RUN useradd -r -u 1001 bank                  # do not run as root
+COPY --from=build /app/target/*.jar app.jar
+USER bank
+EXPOSE 8080
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]</pre>
+<pre class="code">docker build -t banking-app .
+docker run -p 8080:8080 -e DB_PASSWORD=... -e JWT_SECRET=... banking-app</pre>
+
+<h3>3.2 docker-compose.yml &mdash; full stack</h3>
+<pre class="code">services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: banking_db
+    volumes: [ "mysql-data:/var/lib/mysql" ]
+    healthcheck: { test: ["CMD", "mysqladmin", "ping", "-h", "localhost"], interval: 10s, retries: 10 }
+
+  redis:
+    image: redis:7
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  banking-app:
+    build: .
+    depends_on: { mysql: { condition: service_healthy }, redis: { condition: service_started }, kafka: { condition: service_started } }
+    expose: [ "8080" ]
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/banking_db
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  notification-service:
+    build: ../notification-service
+    depends_on: [ mysql, kafka ]
+    expose: [ "8081" ]
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/notification_db?createDatabaseIfNotExist=true
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: [ "80:80" ]
+    volumes: [ "./nginx/nginx.conf:/etc/nginx/nginx.conf:ro" ]
+    depends_on: [ banking-app, notification-service ]
+
+  prometheus:
+    image: prom/prometheus
+    volumes: [ "./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro" ]
+  grafana:
+    image: grafana/grafana
+    ports: [ "3000:3000" ]
+
+volumes:
+  mysql-data:</pre>
+<div class="note">Inside Compose, services reach each other by <b>service name</b> (<code>kafka:9092</code>, <code>mysql:3306</code>), never <code>localhost</code>. Only Nginx (and Grafana for the operator) publish ports to the host.</div>
+<pre class="code">docker compose up -d --build     # start everything
+docker compose ps                 # all services Up / healthy
+docker compose logs -f banking-app
+docker compose down               # stop (add -v to also delete the MySQL volume)</pre>
+
+<h2>4. Configuration</h2>
+<h3>4.1 Properties reference</h3>
+<table>
+  <tr><th>Property</th><th>Env override</th><th>Default</th><th>Notes</th></tr>
+  <tr><td><code>spring.datasource.url</code></td><td>SPRING_DATASOURCE_URL</td><td>jdbc:mysql://localhost:3306/banking_db?createDatabaseIfNotExist=true</td><td></td></tr>
+  <tr><td><code>spring.datasource.username</code></td><td>DB_USERNAME</td><td>root</td><td></td></tr>
+  <tr><td><code>spring.datasource.password</code></td><td>DB_PASSWORD</td><td>&mdash;</td><td>required</td></tr>
+  <tr><td><code>spring.jpa.hibernate.ddl-auto</code></td><td>&mdash;</td><td>update</td><td><code>validate</code> in prod</td></tr>
+  <tr><td><code>spring.jpa.show-sql</code></td><td>&mdash;</td><td>true</td><td>false in prod</td></tr>
+  <tr><td><code>jwt.secret</code></td><td>JWT_SECRET</td><td>&mdash;</td><td>required, &ge; 32 bytes</td></tr>
+  <tr><td><code>jwt.expiration</code></td><td>JWT_EXPIRATION</td><td>86400000</td><td>ms</td></tr>
+  <tr><td><code>spring.kafka.bootstrap-servers</code></td><td>KAFKA_BOOTSTRAP_SERVERS</td><td>localhost:9092</td><td></td></tr>
+  <tr><td><code>spring.data.redis.host/port</code></td><td>SPRING_DATA_REDIS_HOST</td><td>localhost / 6379</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td><code>spring.cache.redis.time-to-live</code></td><td>&mdash;</td><td>600000</td><td>10 min <span class="badge planned">PLANNED</span></td></tr>
+  <tr><td><code>management.endpoints.web.exposure.include</code></td><td>&mdash;</td><td>health,info,metrics,prometheus</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td><code>server.forward-headers-strategy</code></td><td>&mdash;</td><td>native (prod)</td><td>trust Nginx X-Forwarded-* <span class="badge planned">PLANNED</span></td></tr>
+  <tr><td><code>spring.datasource.hikari.maximum-pool-size</code></td><td>&mdash;</td><td>10</td><td>tune under load</td></tr>
+</table>
+
+<h3>4.2 Profiles <span class="badge planned">PLANNED</span></h3>
+<pre class="code"># application-dev.properties
+spring.jpa.show-sql=true
+logging.level.org.example.enterprisedigitalbankingsystem=DEBUG
+
+# application-prod.properties
+spring.jpa.show-sql=false
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+server.forward-headers-strategy=native
+logging.level.org.example.enterprisedigitalbankingsystem=INFO</pre>
+<p>Activate with <code>--spring.profiles.active=dev</code> or <code>SPRING_PROFILES_ACTIVE=prod</code>.</p>
+
+<h2>5. CI/CD Pipeline <span class="badge planned">PLANNED</span></h2>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  A["git push / PR<br/>to master"] --> B["Checkout +<br/>JDK 17 + Maven cache"]
+  B --> C["./mvnw verify<br/>unit + integration tests"]
+  C --> D["JaCoCo coverage<br/>+ dependency scan"]
+  D --> E{"branch = master?"}
+  E -->|no| F(["PR status check"])
+  E -->|yes| G["docker build + push<br/>to GHCR / ECR"]
+  G --> H["Deploy jar to<br/>Elastic Beanstalk"]
+  H --> I["Smoke test<br/>/actuator/health"]
+</pre>
+<div class="cap">Figure 1 &mdash; CI/CD pipeline</div>
+</div>
+<pre class="code"># .github/workflows/ci.yml
+name: CI
+on:
+  push: { branches: [ master ] }
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17', cache: maven }
+      - run: ./mvnw -B verify
+        env:
+          JWT_SECRET: ${{ secrets.TEST_JWT_SECRET }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: test-reports, path: target/surefire-reports }
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17', cache: maven }
+      - run: ./mvnw -B -DskipTests package
+      - uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: banking-app
+          environment_name: banking-app-prod
+          region: ap-south-1
+          version_label: ${{ github.sha }}
+          deployment_package: target/Enterprise-Digital-Banking-System-0.0.1-SNAPSHOT.jar</pre>
+
+<h2>6. AWS Deployment <span class="badge planned">PLANNED</span></h2>
+<ol>
+  <li>Build: <code>./mvnw clean package -DskipTests</code> &rarr; <code>target/Enterprise-Digital-Banking-System-0.0.1-SNAPSHOT.jar</code>.</li>
+  <li>Create an <b>RDS MySQL 8</b> instance (private subnet, security group allowing 3306 only from the EB instances).</li>
+  <li>Create an <b>Elastic Beanstalk</b> Java (Corretto 17) application; upload the jar (console or <code>eb init</code> / <code>eb create</code>).</li>
+  <li>Configuration &rarr; Software &rarr; Environment properties: <code>SPRING_PROFILES_ACTIVE=prod</code>, <code>DB_PASSWORD</code>, <code>JWT_SECRET</code>, <code>SPRING_DATASOURCE_URL=jdbc:mysql://&lt;rds-endpoint&gt;:3306/banking_db</code>, <code>SERVER_PORT=5000</code> (EB&rsquo;s default proxy port).</li>
+  <li>Attach an ACM certificate to the load balancer for HTTPS.</li>
+  <li>Kafka (MSK) and Redis (ElastiCache) are deferred: they stay containerised and documented. Without a broker, producers log errors and transfers still succeed.</li>
+  <li>Verify: <code>curl https://&lt;eb-url&gt;/actuator/health</code> &rarr; <code>{"status":"UP"}</code>.</li>
+</ol>
+
+<h2>7. Logging</h2>
+<h3>7.1 Configuration <span class="badge planned">PLANNED</span></h3>
+<pre class="code">&lt;!-- src/main/resources/logback-spring.xml --&gt;
+&lt;configuration&gt;
+  &lt;include resource="org/springframework/boot/logging/logback/defaults.xml"/&gt;
+  &lt;appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender"&gt;
+    &lt;encoder&gt;&lt;pattern&gt;%d{HH:mm:ss.SSS} %-5level [%thread] %X{traceId:-} %logger{36} - %msg%n&lt;/pattern&gt;&lt;/encoder&gt;
+  &lt;/appender&gt;
+  &lt;logger name="org.example.enterprisedigitalbankingsystem" level="INFO"/&gt;
+  &lt;logger name="org.hibernate.SQL" level="DEBUG"/&gt;
+  &lt;logger name="org.springframework" level="WARN"/&gt;
+  &lt;root level="INFO"&gt;&lt;appender-ref ref="CONSOLE"/&gt;&lt;/root&gt;
+&lt;/configuration&gt;</pre>
+<h3>7.2 Logging rules</h3>
+<table>
+  <tr><th>Level</th><th>Use for</th></tr>
+  <tr><td>ERROR</td><td>Unexpected failures needing action (Kafka publish failed, unhandled exception)</td></tr>
+  <tr><td>WARN</td><td>Recoverable problems (rate limiter unavailable &rarr; fail-open, retries)</td></tr>
+  <tr><td>INFO</td><td>Business milestones (transfer completed with reference, loan approved) &mdash; no PII</td></tr>
+  <tr><td>DEBUG</td><td>Diagnostics, SQL (dev only)</td></tr>
+</table>
+<p>Never log passwords, JWTs, full Aadhaar/PAN, or request bodies of auth endpoints. Log the transaction <i>reference</i>, not the account holder&rsquo;s details. Logs are distinct from the audit trail: logs are for operators and may be rotated; <code>audit_logs</code> is a compliance record.</p>
+
+<h2>8. Monitoring <span class="badge planned">PLANNED</span></h2>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  APP["banking-app<br/>Actuator + Micrometer"] -->|"GET /actuator/prometheus<br/>every 15 s"| PR["Prometheus :9090"]
+  NS["notification-service"] --> PR
+  PR --> GR["Grafana :3000<br/>dashboard 4701 JVM Micrometer"]
+  PR --> AL["Alert rules"]
+</pre>
+<div class="cap">Figure 2 &mdash; Metrics pipeline</div>
+</div>
+<pre class="code">&lt;dependency&gt;&lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;&lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;&lt;/dependency&gt;
+&lt;dependency&gt;&lt;groupId&gt;io.micrometer&lt;/groupId&gt;&lt;artifactId&gt;micrometer-registry-prometheus&lt;/artifactId&gt;&lt;/dependency&gt;
+
+management.endpoints.web.exposure.include=health,info,metrics,prometheus
+management.endpoint.health.show-details=always
+
+# monitoring/prometheus.yml
+scrape_configs:
+  - job_name: banking-app
+    metrics_path: /actuator/prometheus
+    static_configs: [ { targets: ['banking-app:8080'] } ]</pre>
+<table>
+  <tr><th>Signal</th><th>Metric</th><th>Alert when</th></tr>
+  <tr><td>Availability</td><td><code>up{job="banking-app"}</code>, <code>/actuator/health</code></td><td>down &gt; 1 min</td></tr>
+  <tr><td>Error rate</td><td><code>http_server_requests_seconds_count{status=~"5.."}</code></td><td>&gt; 2 % of requests for 5 min</td></tr>
+  <tr><td>Latency</td><td><code>http_server_requests_seconds</code> p95 for <code>/transactions/transfer</code></td><td>&gt; 500 ms</td></tr>
+  <tr><td>JVM</td><td><code>jvm_memory_used_bytes</code>, GC pause</td><td>heap &gt; 85 %</td></tr>
+  <tr><td>DB pool</td><td><code>hikaricp_connections_pending</code></td><td>&gt; 0 sustained</td></tr>
+  <tr><td>Kafka</td><td>consumer lag (<code>kafka-consumer-groups.sh --describe --group notification-service</code>)</td><td>lag growing for 10 min</td></tr>
+  <tr><td>Business</td><td>custom counters: transfers, failed logins (Micrometer <code>Counter</code>)</td><td>failed logins spike</td></tr>
+</table>
+
+<h2>9. Backup and Recovery</h2>
+<table>
+  <tr><th>Item</th><th>Approach</th></tr>
+  <tr><td>Objectives</td><td>RPO &le; 15 min (max data loss), RTO &le; 1 h (max downtime)</td></tr>
+  <tr><td>Local / Compose</td><td>Nightly logical dump: <code>docker exec mysql mysqldump -uroot -p$DB_PASSWORD --single-transaction --routines banking_db | gzip &gt; backup/banking_$(date +%F).sql.gz</code>; keep 14 days</td></tr>
+  <tr><td>AWS RDS</td><td>Automated backups (7&ndash;35 days) + point-in-time recovery from binlogs; manual snapshot before every release</td></tr>
+  <tr><td>Schema</td><td>Recreated from Flyway migrations in git</td></tr>
+  <tr><td>Kafka</td><td>Not a system of record. Events lost before consumption only cost a notification; source of truth is MySQL</td></tr>
+  <tr><td>Redis</td><td>Cache only &mdash; no backup needed; flushed on restore</td></tr>
+  <tr><td>Secrets</td><td>Stored in EB / Secrets Manager, not in backups</td></tr>
+</table>
+<h3>9.1 Restore procedure</h3>
+<ol>
+  <li>Stop banking-app (prevent writes).</li>
+  <li>Restore: <code>gunzip -c banking_YYYY-MM-DD.sql.gz | mysql -uroot -p banking_db</code> (RDS: restore snapshot / PITR to a new instance and switch the URL).</li>
+  <li>Start the app; Flyway validates the schema version.</li>
+  <li>Flush Redis (<code>redis-cli FLUSHALL</code>) so no pre-restore balances are served.</li>
+  <li>Reconcile: for every account, <code>balance</code> must equal the last <code>ledger_entries.balance_after_entry</code>.</li>
+  <li>Test the restore quarterly &mdash; an untested backup is not a backup.</li>
+</ol>
+<pre class="code">-- Reconciliation query
+SELECT a.id, a.account_number, a.balance, le.balance_after_entry
+FROM accounts a
+JOIN ledger_entries le ON le.id = (SELECT MAX(id) FROM ledger_entries WHERE account_id = a.id)
+WHERE a.balance &lt;&gt; le.balance_after_entry;    -- must return 0 rows</pre>
+
+<h2>10. Troubleshooting Runbook</h2>
+<table>
+  <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+  <tr><td>App fails at startup: <code>Could not resolve placeholder 'jwt.secret'</code></td><td><code>JWT_SECRET</code> not set</td><td>Set env var in run config / compose</td></tr>
+  <tr><td><code>WeakKeyException</code></td><td>JWT secret shorter than 256 bits</td><td>Use <code>openssl rand -base64 48</code></td></tr>
+  <tr><td><code>Access denied for user 'root'</code></td><td>Wrong <code>DB_PASSWORD</code></td><td>Fix env var</td></tr>
+  <tr><td><code>Communications link failure</code></td><td>MySQL not running / wrong host (localhost vs mysql in compose)</td><td>Start MySQL; check datasource URL</td></tr>
+  <tr><td>Every request returns 401</td><td>Missing <code>Bearer </code> prefix, expired token, or secret changed since token was issued</td><td>Log in again; check header</td></tr>
+  <tr><td>Transfers succeed but no notification</td><td>Kafka down, topic name typo (e.g. stray space), notification-service not running, SMTP creds unset (status FAILED)</td><td><code>docker ps</code>; check both apps&rsquo; bootstrap servers; check consumer logs</td></tr>
+  <tr><td>Producer logs <code>Failed to publish ...Event</code></td><td>Broker unreachable</td><td>Start Kafka; events are not retried &mdash; affected notifications are lost</td></tr>
+  <tr><td>Intermittent 500 on concurrent deposits</td><td><code>ObjectOptimisticLockingFailureException</code></td><td>Expected protection; client retries (409 mapping planned)</td></tr>
+  <tr><td>Stale balance returned</td><td>Missing <code>@CacheEvict</code> on a write path</td><td>Add eviction; <code>redis-cli FLUSHALL</code></td></tr>
+  <tr><td>Flyway <code>Validate failed: Migration checksum mismatch</code></td><td>An applied migration file was edited</td><td>Revert the edit; create a new V&lt;n&gt; file</td></tr>
+  <tr><td>Customer delete returns 500</td><td>FK: customer still has accounts / loans / beneficiaries</td><td>Close/remove children first</td></tr>
+</table>

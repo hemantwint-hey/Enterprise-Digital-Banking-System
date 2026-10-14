@@ -1,0 +1,309 @@
+<!-- title: Architecture Documentation | subtitle: System architecture, component design, deployment architecture, technology choices and Architecture Decision Records (ADRs). | out: 01-Architecture-Documentation.pdf -->
+
+<h2>1. System Overview</h2>
+<p>The <b>Enterprise Digital Banking System</b> is a backend platform that simulates the core operations of a retail bank: user registration and login, customer onboarding with KYC, savings/current accounts, deposits, withdrawals and transfers backed by a <b>double-entry ledger</b>, saved beneficiaries, loans with an EMI repayment schedule, and a full <b>audit trail</b>. Customer-facing notifications are handled by a separate <b>notification-service</b> that consumes domain events from Apache Kafka.</p>
+
+<h3>1.1 Goals</h3>
+<ul>
+  <li><b>Correctness of money movement</b> &mdash; every balance change is recorded atomically as a transaction plus ledger entries; debits always equal credits.</li>
+  <li><b>Security</b> &mdash; stateless JWT authentication, BCrypt password hashing, no secrets in source control.</li>
+  <li><b>Traceability</b> &mdash; every important state change is written to <code>audit_logs</code> with who, what, old/new value and client IP.</li>
+  <li><b>Loose coupling</b> &mdash; notifications are asynchronous; a notification outage can never fail or slow a transfer.</li>
+  <li><b>Operability</b> &mdash; containerised, observable (Actuator, Prometheus, Grafana) and deployable to AWS.</li>
+</ul>
+
+<h3>1.2 Actors</h3>
+<table>
+  <tr><th>Actor</th><th>Description</th><th>Typical actions</th></tr>
+  <tr><td>Customer</td><td>Retail bank user (role <code>CUSTOMER</code>)</td><td>Register, log in, view accounts, transfer money, manage beneficiaries, apply for loans, pay EMIs</td></tr>
+  <tr><td>Employee / Manager</td><td>Bank staff (roles <code>EMPLOYEE</code>, <code>MANAGER</code>)</td><td>Onboard customers, complete KYC, open/freeze/close accounts, approve or reject loans</td></tr>
+  <tr><td>Admin</td><td>Platform administrator (role <code>ADMIN</code>)</td><td>User management, configuration, everything staff can do</td></tr>
+  <tr><td>Auditor</td><td>Compliance user (role <code>AUDITOR</code>)</td><td>Read-only access to audit logs and ledgers</td></tr>
+  <tr><td>notification-service</td><td>Internal system actor</td><td>Consumes Kafka events and delivers e-mail / SMS / push / in-app notifications</td></tr>
+</table>
+<div class="warn"><b>Role enforcement:</b> the five roles exist in the <code>Role</code> enum and are placed in the JWT principal&rsquo;s authorities, but endpoint-level authorization (<code>@PreAuthorize</code> / <code>requestMatchers(...).hasRole(...)</code>) is <span class="badge planned">PLANNED</span>. Today every authenticated user can call every <code>/api/v1/**</code> endpoint. See document 05 &mdash; Security.</div>
+
+<h3>1.3 Scope</h3>
+<table>
+  <tr><th>Capability</th><th>Status</th></tr>
+  <tr><td>Authentication (register, login, JWT)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Customer profile + KYC (PAN / Aadhaar)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Accounts (open, update, freeze, close)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Transactions (deposit, withdraw, transfer) + double-entry ledger</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Beneficiaries (add, activate, transfer-by-beneficiary)</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Loans + EMI schedule</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Audit logging</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Kafka events &rarr; notification-service (e-mail, SMS, push, in-app)</td><td><span class="badge built">BUILT</span> (SMTP credentials deferred)</td></tr>
+  <tr><td>Cards</td><td><span class="badge planned">PLANNED</span> (package skeleton only)</td></tr>
+  <tr><td>Redis cache, pagination, search, Swagger</td><td><span class="badge planned">PLANNED</span> (roadmap 01, 06)</td></tr>
+  <tr><td>Docker Compose, profiles, Flyway, Actuator/Prometheus/Grafana, Nginx + rate limiting, AWS</td><td><span class="badge planned">PLANNED</span> (roadmap 03, 04, 08, 09)</td></tr>
+  <tr><td>Refresh tokens, forgot/reset/change password</td><td><span class="badge planned">PLANNED</span> (DTOs exist, no endpoints)</td></tr>
+</table>
+
+<h2>2. System Architecture Diagram</h2>
+<p>The target architecture (after roadmap items 01&ndash;09). Components marked <i>planned</i> are not yet in the running system; the core path Client &rarr; banking-app &rarr; MySQL / Kafka &rarr; notification-service exists today.</p>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  C["Clients<br/>Postman / Web / Mobile"] -->|HTTPS| N["Nginx reverse proxy<br/>TLS, limit_req<br/><i>planned</i>"]
+  N -->|"/auth/**, /api/**"| B
+  N -->|"/notifications/**"| NS
+  subgraph B["banking-app :8080 (Spring Boot)"]
+    direction TB
+    F["Security filter chain<br/>RateLimitFilter (planned) &rarr; JwtAuthenticationFilter"] --> CT["REST controllers"]
+    CT --> SV["Services<br/>business rules, @Transactional"]
+    SV --> RP["Spring Data JPA repositories"]
+    SV --> PR["Kafka producers"]
+    SV --> AU["AuditService"]
+  end
+  RP --> DB[("MySQL 8<br/>banking_db")]
+  SV -.->|"cache (planned)"| R[("Redis 7")]
+  PR -->|"transaction.completed<br/>beneficiary.activated"| K{{"Apache Kafka 3.8<br/>KRaft single node"}}
+  K --> NS["notification-service :8081"]
+  NS --> NDB[("MySQL<br/>notification_db")]
+  NS --> SMTP["SMTP / SMS / Push providers"]
+  B -.->|"/actuator/prometheus"| P["Prometheus<br/><i>planned</i>"] --> G["Grafana<br/><i>planned</i>"]
+</pre>
+<div class="cap">Figure 1 &mdash; System architecture (target state)</div>
+</div>
+
+<h3>2.1 Runtime components</h3>
+<table>
+  <tr><th>Component</th><th>Responsibility</th><th>Port</th><th>Status</th></tr>
+  <tr><td>banking-app</td><td>All banking REST APIs, business rules, persistence, event publishing, audit</td><td>8080</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>notification-service</td><td>Kafka consumers; notification engine (strategy, decorator, observer, retry with exponential back-off, idempotency key)</td><td>8081</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>MySQL 8</td><td><code>banking_db</code> and <code>notification_db</code> (separate schemas, one per service)</td><td>3306</td><td><span class="badge built">BUILT</span></td></tr>
+  <tr><td>Apache Kafka 3.8 (KRaft)</td><td>Event bus between the two services</td><td>9092</td><td><span class="badge built">BUILT</span> (compose file in notification-service)</td></tr>
+  <tr><td>Redis 7</td><td>Account read cache; shared rate-limit counters</td><td>6379</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Nginx</td><td>Single public entry point, TLS termination, per-IP rate limiting, body-size limits</td><td>80/443</td><td><span class="badge planned">PLANNED</span></td></tr>
+  <tr><td>Prometheus + Grafana</td><td>Metrics scraping and dashboards</td><td>9090 / 3000</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h2>3. Layered Architecture</h2>
+<p>banking-app is a <b>modular monolith</b>: one deployable, organised <b>package-by-feature</b> (<code>account</code>, <code>customer</code>, <code>transaction</code>, &hellip;). Inside every feature the same four layers repeat.</p>
+<div class="figure">
+<pre class="mermaid">
+flowchart TB
+  REQ["HTTP request (JSON)"] --> SEC["Security layer<br/>JwtAuthenticationFilter, SecurityConfig, JwtAuthenticationEntryPoint"]
+  SEC --> CTL["Controller layer<br/>@RestController, @Valid request DTOs, ResponseEntity"]
+  CTL --> SVC["Service layer<br/>interface + Impl, @Transactional, business rules"]
+  SVC --> MAP["Mapper<br/>Entity &harr; DTO"]
+  SVC --> REPO["Repository layer<br/>JpaRepository + derived queries"]
+  REPO --> ENT["Entity layer<br/>@Entity, @PrePersist, @Version"]
+  ENT --> DB[("MySQL")]
+  SVC --> X["Cross-cutting: AuditService, Kafka producers"]
+  CTL -.->|exceptions| GEH["GlobalExceptionHandler<br/>&rarr; ErrorResponse JSON"]
+  SVC -.->|exceptions| GEH
+</pre>
+<div class="cap">Figure 2 &mdash; Request path through the layers</div>
+</div>
+<table>
+  <tr><th>Layer</th><th>Rules</th></tr>
+  <tr><td>Controller</td><td>Thin. Validates input with Bean Validation (<code>@Valid</code>), delegates to exactly one service call, never touches repositories, returns DTOs only (never entities).</td></tr>
+  <tr><td>Service</td><td>Owns business rules and the transaction boundary (<code>@Transactional</code> at class level, <code>readOnly = true</code> on queries). Throws domain exceptions (<code>BadRequestException</code>, <code>ResourceNotFoundException</code>, &hellip;).</td></tr>
+  <tr><td>Mapper</td><td>Hand-written <code>@Component</code> classes converting entities to response DTOs (and request DTOs to entities). No business logic.</td></tr>
+  <tr><td>Repository</td><td>Spring Data JPA interfaces; derived query methods only (parameterised SQL, no string concatenation).</td></tr>
+  <tr><td>Entity</td><td>JPA mapping, defaults via <code>@PrePersist</code>, enums stored as <code>STRING</code>, money as <code>DECIMAL(18,2)</code>, optimistic locking on <code>Account</code> via <code>@Version</code>.</td></tr>
+</table>
+
+<h3>3.1 Package structure</h3>
+<pre class="code">org.example.enterprisedigitalbankingsystem
+├── EnterpriseDigitalBankingSystemApplication.java
+├── auth/          controller · dto · entity(User, Role, UserStatus) · repository · service
+├── customer/      controller · dto · entity(Customer, KYCStatus) · mapper · repository · service
+├── account/       controller · dto · entity(Account, AccountType, AccountStatus) · mapper · repository · service
+├── transaction/   controller · dto · entity(Transaction, TransactionType, TransactionStatus) · mapper · repository · service
+├── ledger/        controller · dto · entity(LedgerEntry, EntryType) · mapper · repository · service
+├── beneficiary/   controller · dto · entity(Beneficiary, BeneficiaryStatus) · mapper · repository · service
+├── loan/          controller · dto · entity(Loan, LoanType, LoanStatus) · mapper · repository · service
+├── emi/           controller · dto · entity(Emi, EmiStatus) · mapper · repository · service
+├── audit/         controller · dto · entity(AuditLog, AuditAction) · mapper · repository · service
+├── card/          skeleton only (PLANNED)
+├── kafka/         config(KafkaProducerConfig) · event(*Event) · producer(*EventProducer)
+├── security/      JwtUtil · JwtAuthenticationFilter · JwtAuthenticationEntryPoint · SecurityConfig · CustomUserDetails(Service)
+├── config/        SecurityBeansConfig (BCryptPasswordEncoder)
+└── exception/     GlobalExceptionHandler · ErrorResponse · custom exceptions</pre>
+
+<h2>4. Component Diagram</h2>
+<p>Service-level dependencies inside banking-app. Arrows mean &ldquo;calls / depends on&rdquo;. Note that services may depend on <i>another module&rsquo;s repository</i>, but service-to-service dependencies only ever point one way (no cycles).</p>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  subgraph Web
+    AC[AuthController]; CC[CustomerController]; ACC[AccountController]; TC[TransactionController]
+    LC[LedgerController]; BC[BeneficiaryController]; LOC[LoanController]; EC[EmiController]; AUC[AuditController]
+  end
+  AC --> US[UserService]; CC --> CS[CustomerService]; ACC --> AS[AccountService]; TC --> TS[TransactionService]
+  LC --> LS[LedgerService]; BC --> BS[BeneficiaryService]; LOC --> LOS[LoanService]; EC --> ES[EmiService]; AUC --> AUS[AuditService]
+  US --> AUS; US --> JWT[JwtUtil]
+  AS --> AUS
+  TS --> LS; TS --> AUS; TS --> TEP[TransactionEventProducer]
+  BS --> AUS; BS --> BEP[BeneficiaryEventProducer]
+  LOS --> ES
+  ES -.->|"LoanRepository only<br/>(avoids cycle)"| LR[(LoanRepository)]
+  TEP --> KT[KafkaTemplate]; BEP --> KT
+</pre>
+<div class="cap">Figure 3 &mdash; Component / service dependency diagram</div>
+</div>
+
+<h3>4.1 Module catalogue</h3>
+<table>
+  <tr><th>Module</th><th>Owns table(s)</th><th>Depends on</th><th>Publishes / side effects</th></tr>
+  <tr><td>auth</td><td><code>users</code></td><td>UserRepository, PasswordEncoder, JwtUtil, AuditService</td><td>Audit: CREATE, LOGIN, LOGIN_FAILED</td></tr>
+  <tr><td>customer</td><td><code>customers</code></td><td>CustomerRepository, UserRepository</td><td>Sets <code>users.kyc_verified</code> on KYC</td></tr>
+  <tr><td>account</td><td><code>accounts</code></td><td>AccountRepository, CustomerRepository, AuditService</td><td>Audit: CREATE/UPDATE</td></tr>
+  <tr><td>transaction</td><td><code>transactions</code></td><td>AccountRepository, BeneficiaryRepository, LedgerService, AuditService, TransactionEventProducer</td><td>Ledger entries; Kafka <code>transaction.completed</code> (transfers); audit</td></tr>
+  <tr><td>ledger</td><td><code>ledger_entries</code></td><td>LedgerRepository</td><td>&mdash;</td></tr>
+  <tr><td>beneficiary</td><td><code>beneficiaries</code></td><td>BeneficiaryRepository, CustomerRepository, AccountRepository, AuditService, BeneficiaryEventProducer</td><td>Kafka <code>beneficiary.activated</code>; audit</td></tr>
+  <tr><td>loan</td><td><code>loans</code></td><td>LoanRepository, CustomerRepository, AccountRepository, EmiService</td><td>Credits disbursement account on approval; generates EMI schedule</td></tr>
+  <tr><td>emi</td><td><code>emis</code></td><td>EmiRepository, LoanRepository</td><td>Closes loan when last EMI is paid</td></tr>
+  <tr><td>audit</td><td><code>audit_logs</code></td><td>AuditRepository, SecurityContext, current HTTP request</td><td>&mdash;</td></tr>
+  <tr><td>card</td><td><code>cards</code> (planned)</td><td>&mdash;</td><td><span class="badge planned">PLANNED</span></td></tr>
+</table>
+
+<h3>4.2 notification-service internals</h3>
+<p>notification-service is a separate Spring Boot application (port 8081) with its own database. Its design uses classic patterns:</p>
+<table>
+  <tr><th>Pattern</th><th>Classes</th><th>Purpose</th></tr>
+  <tr><td>Strategy</td><td><code>NotificationChannel</code> &rarr; Email / Sms / Push / InApp; <code>NotificationChannelResolver</code></td><td>Pick the delivery channel by <code>NotificationType</code></td></tr>
+  <tr><td>Decorator</td><td><code>SimpleNotification</code>, <code>TimestampNotificationDecorator</code>, <code>SignatureNotificationDecorator</code></td><td>Compose message content</td></tr>
+  <tr><td>Observer</td><td><code>NotificationEventPublisher</code> + Audit / Logging / Metrics listeners</td><td>React to lifecycle events (sent, failed, retrying)</td></tr>
+  <tr><td>Retry policy</td><td><code>ExponentialBackoffRetryPolicy</code></td><td>Retry failed deliveries with exponential back-off</td></tr>
+  <tr><td>Idempotency</td><td>Unique <code>idempotency_key</code> = event&rsquo;s <code>eventId</code></td><td>A redelivered Kafka message never sends a duplicate notification</td></tr>
+</table>
+
+<h2>5. Event-Driven Integration</h2>
+<table>
+  <tr><th>Topic</th><th>Producer</th><th>Trigger</th><th>Message key</th><th>Consumer (group <code>notification-service</code>)</th></tr>
+  <tr><td><code>transaction.completed</code></td><td>TransactionEventProducer</td><td>Successful <b>transfer</b></td><td>source <code>accountId</code></td><td>TransactionEventConsumer &rarr; HIGH-priority e-mail</td></tr>
+  <tr><td><code>beneficiary.activated</code></td><td>BeneficiaryEventProducer</td><td>Beneficiary moved PENDING &rarr; ACTIVE</td><td><code>customerId</code></td><td>BeneficiaryEventConsumer &rarr; MEDIUM-priority e-mail</td></tr>
+  <tr><td><code>&lt;topic&gt;.DLT</code></td><td>DeadLetterPublishingRecoverer</td><td>Consumer failed 3 times (2 s apart)</td><td>same</td><td>Manual inspection <span class="badge planned">PLANNED</span></td></tr>
+</table>
+<ul>
+  <li>Payloads are JSON strings (<code>StringSerializer</code>) built with Jackson. Keying by account / customer keeps all events for one account in order on one partition.</li>
+  <li>Publishing is <b>fire-and-forget</b>: producer exceptions are logged and swallowed so a Kafka outage never rolls back a committed money movement.</li>
+  <li>The event is published inside the service&rsquo;s <code>@Transactional</code> method, before commit. <span class="badge gap">GAP</span> if the DB commit later fails, a notification can be sent for a transfer that did not happen. A transactional outbox (or <code>@TransactionalEventListener(AFTER_COMMIT)</code>) is the documented fix.</li>
+</ul>
+
+<h2>6. Deployment Architecture</h2>
+<h3>6.1 Local / Docker Compose <span class="badge planned">PLANNED</span></h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart TB
+  subgraph Host["Developer machine / VM"]
+    subgraph Net["docker compose network"]
+      NG["nginx:1.27-alpine<br/>:80 / :443 published"]
+      BA["banking-app<br/>expose 8080"]
+      NS["notification-service<br/>expose 8081"]
+      MY[("mysql:8.0<br/>banking_db, notification_db")]
+      RD[("redis:7")]
+      KF{{"apache/kafka:3.8.0<br/>KRaft"}}
+      PM["prometheus"]; GF["grafana"]
+    end
+  end
+  U["Client"] --> NG
+  NG --> BA; NG --> NS
+  BA --> MY; BA --> RD; BA --> KF
+  NS --> MY; NS --> KF
+  PM --> BA; GF --> PM
+</pre>
+<div class="cap">Figure 4 &mdash; Container topology (target). Only Nginx is published to the host.</div>
+</div>
+
+<h3>6.2 Cloud (AWS) <span class="badge planned">PLANNED</span></h3>
+<div class="figure">
+<pre class="mermaid">
+flowchart LR
+  U["Internet clients"] -->|HTTPS| ALB["Elastic Beanstalk load balancer<br/>ACM TLS certificate"]
+  ALB --> EB["Elastic Beanstalk (Java platform)<br/>banking-app jar, SPRING_PROFILES_ACTIVE=prod"]
+  EB --> RDS[("Amazon RDS for MySQL")]
+  EB -.->|later| MSK{{"Amazon MSK (Kafka)"}}
+  EB -.->|later| EC[("ElastiCache Redis")]
+</pre>
+<div class="cap">Figure 5 &mdash; Minimal AWS deployment: app + RDS first; Kafka/Redis remain containerised and documented.</div>
+</div>
+
+<h2>7. Technology Choices</h2>
+<table>
+  <tr><th>Concern</th><th>Choice</th><th>Why</th></tr>
+  <tr><td>Language / runtime</td><td>Java 17 (LTS)</td><td>Records, pattern matching for <code>instanceof</code>, long-term support</td></tr>
+  <tr><td>Framework</td><td>Spring Boot 4.1 (webmvc, data-jpa, security, validation)</td><td>Industry standard for enterprise Java; auto-configuration</td></tr>
+  <tr><td>Persistence</td><td>Spring Data JPA / Hibernate + MySQL 8</td><td>Relational integrity for money; ACID transactions; <code>DECIMAL</code> precision</td></tr>
+  <tr><td>Authentication</td><td>JWT (jjwt 0.12.6, HS256) + BCrypt</td><td>Stateless, horizontally scalable; no server sessions</td></tr>
+  <tr><td>Messaging</td><td>Apache Kafka 3.8 (KRaft, no ZooKeeper)</td><td>Durable, ordered, replayable events; decouples notifications</td></tr>
+  <tr><td>Boilerplate</td><td>Lombok</td><td>Builders, getters/setters, constructor injection</td></tr>
+  <tr><td>Caching</td><td>Redis 7 via Spring Cache <span class="badge planned">PLANNED</span></td><td>Fast account reads with TTL safety net</td></tr>
+  <tr><td>Migrations</td><td>Flyway <span class="badge planned">PLANNED</span></td><td>Versioned, repeatable schema changes</td></tr>
+  <tr><td>Observability</td><td>Logback, Actuator, Micrometer, Prometheus, Grafana <span class="badge planned">PLANNED</span></td><td>Health, metrics, dashboards</td></tr>
+  <tr><td>API docs</td><td>springdoc-openapi 2.6 <span class="badge planned">PLANNED</span></td><td>Live Swagger UI generated from code</td></tr>
+  <tr><td>Edge</td><td>Nginx + Bucket4j / Redis rate limiter <span class="badge planned">PLANNED</span></td><td>TLS, single entry point, brute-force protection</td></tr>
+  <tr><td>Build</td><td>Maven wrapper (<code>mvnw</code>)</td><td>Reproducible builds without a global Maven install</td></tr>
+</table>
+
+<h2>8. Architecture Decision Records</h2>
+<p>Each ADR records one significant decision: context, decision, and consequences. Status values: <i>Accepted</i>, <i>Proposed</i>, <i>Superseded</i>.</p>
+
+<div class="card"><h4>ADR-001 &mdash; Modular monolith, package-by-feature &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Context:</b> one developer, many related banking domains that share transactions (a transfer touches accounts, ledger, audit).<br/>
+<b>Decision:</b> a single Spring Boot app with one package per feature, each with controller/service/repository/entity sub-packages.<br/>
+<b>Consequences:</b> simple local ACID transactions across modules; modules can later be extracted along the same seams. Discipline needed to avoid cross-module cycles.</p></div>
+
+<div class="card"><h4>ADR-002 &mdash; Notifications in a separate service via Kafka &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Context:</b> sending e-mail is slow and unreliable; a failed e-mail must never fail a transfer.<br/>
+<b>Decision:</b> remove the embedded notification module; banking-app publishes events to Kafka, notification-service consumes them.<br/>
+<b>Consequences:</b> transfers stay fast and independent of SMTP; notifications are eventually consistent; two services, two databases, one more piece of infrastructure (Kafka).</p></div>
+
+<div class="card"><h4>ADR-003 &mdash; Double-entry ledger alongside transactions &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Context:</b> a single <code>transactions</code> row cannot express per-account movements cleanly, and audits need a balance trail.<br/>
+<b>Decision:</b> every transaction writes <code>LedgerEntry</code> rows (DEBIT/CREDIT) with <code>balance_after_entry</code>. A transfer writes exactly one DEBIT and one CREDIT of equal amount.<br/>
+<b>Consequences:</b> statement generation and reconciliation become trivial; extra writes per transaction.</p></div>
+
+<div class="card"><h4>ADR-004 &mdash; Child references parent, no bidirectional collections &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Context:</b> <code>@OneToMany</code> collections invite N+1 queries and accidental cascade deletes.<br/>
+<b>Decision:</b> children hold <code>@ManyToOne(fetch = LAZY)</code> to the parent (<code>Emi &rarr; Loan</code>, <code>LedgerEntry &rarr; Transaction</code>, <code>Account &rarr; Customer</code>); parents stay thin; children are fetched with repository queries.<br/>
+<b>Consequences:</b> predictable SQL; slightly more repository methods.</p></div>
+
+<div class="card"><h4>ADR-005 &mdash; Break service cycles by depending on repositories &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Context:</b> <code>LoanService</code> needs <code>EmiService</code> (generate schedule) and EMI payment must close the loan.<br/>
+<b>Decision:</b> <code>EmiServiceImpl</code> depends on <code>LoanRepository</code>, never on <code>LoanService</code>.<br/>
+<b>Consequences:</b> no circular bean dependency; loan status rules for closing live in the EMI service.</p></div>
+
+<div class="card"><h4>ADR-006 &mdash; Stateless JWT authentication &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Decision:</b> HS256-signed JWT, subject = e-mail, 24 h expiry; <code>SessionCreationPolicy.STATELESS</code>; CSRF disabled (no cookies).<br/>
+<b>Consequences:</b> scales horizontally; tokens cannot be revoked before expiry until refresh tokens / a deny-list are added.</p></div>
+
+<div class="card"><h4>ADR-007 &mdash; Money as BigDecimal / DECIMAL(18,2) &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Decision:</b> all amounts are <code>BigDecimal</code> in Java and <code>DECIMAL(18,2)</code> in MySQL. The EMI formula uses <code>double</code> only for <code>(1+r)^n</code> and rounds immediately with <code>HALF_UP</code>.<br/>
+<b>Consequences:</b> no floating-point drift in stored balances.</p></div>
+
+<div class="card"><h4>ADR-008 &mdash; Optimistic locking on Account &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Decision:</b> <code>@Version</code> column on <code>accounts</code>. Concurrent writers to the same account cause an <code>ObjectOptimisticLockingFailureException</code> instead of a lost update.<br/>
+<b>Consequences:</b> correct under concurrency; clients may need to retry (currently surfaces as HTTP 500 &mdash; mapping to 409 is <span class="badge planned">PLANNED</span>).</p></div>
+
+<div class="card"><h4>ADR-009 &mdash; Keep MySQL (not PostgreSQL) &nbsp;<span class="small">Accepted</span></h4>
+<p><b>Decision:</b> the roadmap mentioned PostgreSQL for later days; the project has used MySQL from day 1, so it stays on MySQL 8.<br/>
+<b>Consequences:</b> no migration risk; Flyway uses <code>flyway-mysql</code>.</p></div>
+
+<div class="card"><h4>ADR-010 &mdash; Schema owned by Flyway in production &nbsp;<span class="small">Proposed</span></h4>
+<p><b>Decision:</b> capture the Hibernate-generated schema as <code>V1__baseline.sql</code>, add indexes in <code>V2__indexes.sql</code>, and run prod with <code>ddl-auto=validate</code>.<br/>
+<b>Consequences:</b> reproducible schema; every change requires a migration file.</p></div>
+
+<div class="card"><h4>ADR-011 &mdash; Cache-aside with full eviction for accounts &nbsp;<span class="small">Proposed</span></h4>
+<p><b>Decision:</b> <code>@Cacheable("accounts")</code> on reads by id and by number; <code>@CacheEvict(allEntries = true)</code> on every write (account updates <i>and</i> deposit / withdraw / transfer), 10-minute TTL.<br/>
+<b>Consequences:</b> never serves a stale balance as long as every write path evicts; TTL bounds the damage of a missed eviction.</p></div>
+
+<div class="card"><h4>ADR-012 &mdash; Two-layer rate limiting (Nginx + app filter) &nbsp;<span class="small">Proposed</span></h4>
+<p><b>Decision:</b> Nginx <code>limit_req</code> per IP at the edge; <code>RateLimitFilter</code> per user / endpoint in the app (Bucket4j in-memory first, Redis Lua fixed-window for multi-instance).<br/>
+<b>Consequences:</b> brute-force protection on <code>/auth/login</code>; 429 responses with <code>Retry-After</code>.</p></div>
+
+<h2>9. Quality Attributes</h2>
+<table>
+  <tr><th>Attribute</th><th>How the architecture addresses it</th></tr>
+  <tr><td>Consistency</td><td>Service-level <code>@Transactional</code>: balance update, transaction row, ledger entries and audit log commit or roll back together.</td></tr>
+  <tr><td>Concurrency safety</td><td><code>@Version</code> optimistic locking on accounts.</td></tr>
+  <tr><td>Availability</td><td>Notifications decoupled through Kafka; producer failures are swallowed and logged.</td></tr>
+  <tr><td>Security</td><td>JWT, BCrypt, env-var secrets, generic 500 messages, parameterised queries. See doc 05.</td></tr>
+  <tr><td>Performance</td><td>Lazy associations, read-only transactions, Redis cache and pagination (planned), explicit indexes (planned).</td></tr>
+  <tr><td>Maintainability</td><td>Consistent package-by-feature layout, DTO/mapper separation, centralised exception handling.</td></tr>
+  <tr><td>Observability</td><td>Audit log today; Actuator + Prometheus + Grafana planned.</td></tr>
+</table>
