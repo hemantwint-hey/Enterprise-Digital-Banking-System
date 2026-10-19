@@ -9,6 +9,7 @@ import org.example.enterprisedigitalbankingsystem.audit.service.AuditService;
 import org.example.enterprisedigitalbankingsystem.beneficiary.entity.Beneficiary;
 import org.example.enterprisedigitalbankingsystem.beneficiary.entity.BeneficiaryStatus;
 import org.example.enterprisedigitalbankingsystem.beneficiary.repository.BeneficiaryRepository;
+import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
 import org.example.enterprisedigitalbankingsystem.kafka.event.TransactionCompletedEvent;
@@ -219,6 +220,13 @@ public class TransactionServiceImpl implements TransactionService {
         transaction = transactionRepository.save(transaction);
         ledgerService.recordTransactionEntries(transaction);
 
+        Customer sourceCustomer = sourceAccount.getCustomer();
+        Long customerId = sourceCustomer != null ? sourceCustomer.getId() : null;
+        String userId = (sourceCustomer != null && sourceCustomer.getUser() != null && sourceCustomer.getUser().getUserId() != null)
+                ? sourceCustomer.getUser().getUserId().toString() : null;
+        String email = (sourceCustomer != null && sourceCustomer.getUser() != null)
+                ? sourceCustomer.getUser().getEmail() : null;
+
         transactionEventProducer.publish(TransactionCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .transactionId(transaction.getId())
@@ -226,9 +234,9 @@ public class TransactionServiceImpl implements TransactionService {
                 .transactionType(transaction.getTransactionType().name())
                 .accountId(sourceAccount.getId())
                 .accountNumber(sourceAccount.getAccountNumber())
-                .customerId(sourceAccount.getCustomer().getId())
-                .userId(sourceAccount.getCustomer().getUser().getUserId().toString())
-                .email(sourceAccount.getCustomer().getUser().getEmail())
+                .customerId(customerId)
+                .userId(userId)
+                .email(email)
                 .amount(amount)
                 .balanceAfterTransaction(sourceNewBalance)
                 .occurredAt(LocalDateTime.now())

@@ -17,6 +17,7 @@ import org.example.enterprisedigitalbankingsystem.transaction.dto.request.Withdr
 import org.example.enterprisedigitalbankingsystem.transaction.entity.Transaction;
 import org.example.enterprisedigitalbankingsystem.transaction.mapper.TransactionMapper;
 import org.example.enterprisedigitalbankingsystem.transaction.repository.TransactionRepository;
+import org.example.enterprisedigitalbankingsystem.kafka.producer.TransactionEventProducer;
 import org.example.enterprisedigitalbankingsystem.transaction.service.impl.TransactionServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,8 @@ class AccountingLogicTest {
     private AuditService auditService;
     @Mock
     private BeneficiaryRepository beneficiaryRepository;
+    @Mock
+    private TransactionEventProducer transactionEventProducer;
 
     private TransactionServiceImpl transactionService;
 
@@ -64,7 +67,7 @@ class AccountingLogicTest {
         LedgerServiceImpl ledgerService = new LedgerServiceImpl(ledgerRepository, new LedgerMapper());
         transactionService = new TransactionServiceImpl(
                 transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService,
-                beneficiaryRepository);
+                beneficiaryRepository, transactionEventProducer);
 
         when(transactionRepository.existsByTransactionReference(anyString())).thenReturn(false);
         when(transactionRepository.save(any(Transaction.class)))

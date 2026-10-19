@@ -113,14 +113,23 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
         beneficiary.setStatus(BeneficiaryStatus.ACTIVE);
         beneficiary = beneficiaryRepository.save(beneficiary);
 
+        Customer customer = beneficiary.getCustomer();
+        Long customerId = customer != null ? customer.getId() : null;
+        String userId = (customer != null && customer.getUser() != null && customer.getUser().getUserId() != null)
+                ? customer.getUser().getUserId().toString() : null;
+        String email = (customer != null && customer.getUser() != null)
+                ? customer.getUser().getEmail() : null;
+        String accountNumber = beneficiary.getBeneficiaryAccount() != null
+                ? beneficiary.getBeneficiaryAccount().getAccountNumber() : null;
+
         beneficiaryEventProducer.publish(BeneficiaryActivatedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .beneficiaryId(beneficiary.getId())
-                .customerId(beneficiary.getCustomer().getId())
-                .userId(beneficiary.getCustomer().getUser().getUserId().toString())
-                .email(beneficiary.getCustomer().getUser().getEmail())
+                .customerId(customerId)
+                .userId(userId)
+                .email(email)
                 .nickName(beneficiary.getNickName())
-                .accountNumber(beneficiary.getBeneficiaryAccount().getAccountNumber())
+                .accountNumber(accountNumber)
                 .occurredAt(LocalDateTime.now())
                 .build()
         );

@@ -18,7 +18,8 @@ public class TransactionEventProducer {
     public void publish(TransactionCompletedEvent event){
         try{
           String payload = objectMapper.writeValueAsString(event);
-          kafkaTemplate.send(TOPIC,event.getAccountId().toString(),payload);
+          String key = event.getAccountId() != null ? event.getAccountId().toString() : null;
+          kafkaTemplate.send(TOPIC, key, payload);
         }
         catch(Exception e){
             log.error("Failed to publish TransactionCompletedEvent for transaction {}",event.getTransactionId(),e);

@@ -18,7 +18,8 @@ public class BeneficiaryEventProducer {
     public void publish(BeneficiaryActivatedEvent event){
         try{
             String payload = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send(TOPIC,event.getCustomerId().toString(),payload);
+            String key = event.getCustomerId() != null? event.getCustomerId().toString() : null;
+            kafkaTemplate.send(TOPIC, key, payload);
         }
         catch (Exception e){
             log.error("Failed to publish BeneficiaryActivatedEvent for beneficiary {}",

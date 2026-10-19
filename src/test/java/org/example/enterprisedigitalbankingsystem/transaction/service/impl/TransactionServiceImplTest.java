@@ -17,6 +17,7 @@ import org.example.enterprisedigitalbankingsystem.transaction.dto.request.Transf
 import org.example.enterprisedigitalbankingsystem.transaction.dto.request.WithdrawRequest;
 import org.example.enterprisedigitalbankingsystem.transaction.dto.response.TransactionResponse;
 import org.example.enterprisedigitalbankingsystem.transaction.entity.Transaction;
+import org.example.enterprisedigitalbankingsystem.kafka.producer.TransactionEventProducer;
 import org.example.enterprisedigitalbankingsystem.transaction.mapper.TransactionMapper;
 import org.example.enterprisedigitalbankingsystem.transaction.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,9 @@ class TransactionServiceImplTest {
     @Mock
     private BeneficiaryRepository beneficiaryRepository;
 
+    @Mock
+    private TransactionEventProducer transactionEventProducer;
+
     private TransactionServiceImpl transactionService;
 
     private Customer sourceCustomer;
@@ -66,7 +70,7 @@ class TransactionServiceImplTest {
     void setUp() {
         transactionService = new TransactionServiceImpl(
                 transactionRepository, accountRepository, new TransactionMapper(), ledgerService, auditService,
-                beneficiaryRepository);
+                beneficiaryRepository, transactionEventProducer);
 
         sourceCustomer = Customer.builder().id(1L).build();
 

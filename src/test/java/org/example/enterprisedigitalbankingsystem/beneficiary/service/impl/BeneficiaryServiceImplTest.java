@@ -16,6 +16,7 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.example.enterprisedigitalbankingsystem.customer.repository.CustomerRepository;
 import org.example.enterprisedigitalbankingsystem.exception.BadRequestException;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
+import org.example.enterprisedigitalbankingsystem.kafka.producer.BeneficiaryEventProducer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,9 @@ class BeneficiaryServiceImplTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private BeneficiaryEventProducer beneficiaryEventProducer;
+
     private BeneficiaryServiceImpl beneficiaryService;
 
     private Customer customer;
@@ -57,7 +61,7 @@ class BeneficiaryServiceImplTest {
     void setUp() {
         beneficiaryService = new BeneficiaryServiceImpl(
                 beneficiaryRepository, customerRepository, accountRepository,
-                new BeneficiaryMapper(), auditService);
+                new BeneficiaryMapper(), auditService, beneficiaryEventProducer);
 
         customer = Customer.builder()
                 .id(1L)
