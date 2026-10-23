@@ -52,6 +52,7 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
             throw new BadRequestException("This account is already added as a beneficiary");
         }
 
+
         Beneficiary beneficiary = Beneficiary.builder()
                 .customer(customer)
                 .beneficiaryAccount(account)
