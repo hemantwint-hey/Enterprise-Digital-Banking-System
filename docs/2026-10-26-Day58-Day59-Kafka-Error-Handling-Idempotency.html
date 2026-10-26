@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day 58 & 59: Kafka Error Handling (DLQ), Consumer Groups & Idempotency - Reference Guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+  }
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #cbd5e1;
+    --soft: #f8fafc;
+    --brand: #0f2b46;
+    --brand-light: #1e3a8a;
+    --accent: #0284c7;
+    --ok: #15803d;
+    --ok-bg: #dcfce7;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --bad: #b91c1c;
+    --bad-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    font-size: 9.8pt;
+    line-height: 1.48;
+    margin: 0;
+    background: #fff;
+  }
+
+  /* Header banner */
+  .header-card {
+    background: linear-gradient(135deg, #0a1e36 0%, #1e3a8a 100%);
+    color: #fff;
+    padding: 16mm 12mm;
+    border-radius: 6px;
+    margin-bottom: 6mm;
+    box-shadow: 0 4px 12px rgba(10, 30, 54, 0.15);
+  }
+  .header-card .badge-row {
+    margin-bottom: 3mm;
+  }
+  .header-card h1 {
+    font-size: 22pt;
+    margin: 0 0 2.5mm;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .header-card p.subtitle {
+    font-size: 11pt;
+    margin: 0 0 4mm;
+    opacity: 0.9;
+    max-width: 90%;
+  }
+  .header-card .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 3.5mm;
+    font-size: 8.5pt;
+  }
+  .header-card .meta-grid div span {
+    display: block;
+    opacity: 0.7;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .header-card .meta-grid div strong {
+    font-size: 9pt;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.8mm 2.2mm;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 1.5mm;
+  }
+  .badge-day { background: #38bdf8; color: #082f49; }
+  .badge-topic { background: rgba(255, 255, 255, 0.2); color: #fff; }
+  .badge-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #86efac; }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde047; }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); border: 1px solid #fca5a5; }
+
+  /* Headings */
+  h2 {
+    font-size: 14pt;
+    color: var(--brand);
+    border-bottom: 2px solid var(--brand);
+    padding-bottom: 1.5mm;
+    margin: 7mm 0 3mm;
+    page-break-after: avoid;
+    display: flex;
+    align-items: center;
+    gap: 2mm;
+  }
+  h3 {
+    font-size: 11pt;
+    color: var(--brand-light);
+    margin: 4mm 0 2mm;
+    page-break-after: avoid;
+  }
+  h4 {
+    font-size: 9.8pt;
+    color: #334155;
+    margin: 3mm 0 1.5mm;
+    page-break-after: avoid;
+  }
+  p { margin: 1mm 0 2.5mm; }
+  ul, ol { margin: 1mm 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 0.8mm; }
+
+  /* Code block styling */
+  code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 8.5pt;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0.2mm 1mm;
+    border-radius: 3px;
+  }
+  pre.code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 8.1pt;
+    line-height: 1.42;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 3mm 4mm;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 2mm 0 4mm;
+    page-break-inside: avoid;
+    border-left: 3.5px solid var(--accent);
+  }
+  pre.code .c { color: #64748b; font-style: italic; } /* comments */
+  pre.code .k { color: #38bdf8; font-weight: bold; }   /* keywords */
+  pre.code .s { color: #4ade80; }                      /* strings */
+  pre.code .a { color: #facc15; }                      /* annotations */
+  pre.code .m { color: #f472b6; }                      /* methods */
+  pre.code .t { color: #c084fc; }                      /* types/classes */
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 4mm;
+    font-size: 8.6pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #1e293b;
+    color: #fff;
+    text-align: left;
+    padding: 2mm 2.5mm;
+    font-weight: 600;
+  }
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 1.8mm 2.5mm;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  /* Boxes & Callouts */
+  .note {
+    border-left: 3.5px solid var(--accent);
+    background: #f0f9ff;
+    padding: 2.5mm 3.5mm;
+    margin: 3mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .warn {
+    border-left: 3.5px solid var(--warn);
+    background: #fffbeb;
+    padding: 2.5mm 3.5mm;
+    margin: 3mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .tip {
+    border-left: 3.5px solid var(--ok);
+    background: #f0fdf4;
+    padding: 2.5mm 3.5mm;
+    margin: 3mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3.5mm;
+    margin: 2.5mm 0 4mm;
+    page-break-inside: avoid;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2.5mm 3.5mm;
+    background: #fff;
+  }
+  .card h4 { margin-top: 0; color: var(--brand); }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .file-header {
+    background: #1e293b;
+    color: #94a3b8;
+    padding: 1.5mm 3mm;
+    font-size: 7.8pt;
+    font-family: monospace;
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid #334155;
+    margin-bottom: -2mm;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+  <!-- COVER / HEADER CARD -->
+  <div class="header-card">
+    <div class="badge-row">
+      <span class="badge badge-day">DAY 58</span>
+      <span class="badge badge-day">DAY 59</span>
+      <span class="badge badge-topic">APACHE KAFKA</span>
+      <span class="badge badge-topic">RESILIENCE &amp; RELIABILITY</span>
+    </div>
+    <h1>Kafka Error Handling, DLQ &amp; Idempotency</h1>
+    <p class="subtitle">Complete Implementation Reference Notes: Dead-Letter Queue (DLQ / DLT), Exponential Backoff, Idempotent Producers, Consumer Groups &amp; Message Deduplication.</p>
+    <div class="meta-grid">
+      <div>
+        <span>Project</span>
+        <strong>Digital Banking System</strong>
+      </div>
+      <div>
+        <span>Producer Microservice</span>
+        <strong>Enterprise-Digital-Banking-System</strong>
+      </div>
+      <div>
+        <span>Consumer Microservice</span>
+        <strong>notification-service</strong>
+      </div>
+      <div>
+        <span>Generated Date</span>
+        <strong>2026-10-26</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: ARCHITECTURE OVERVIEW -->
+  <h2>1. Architectural Big Picture</h2>
+  <p>In our event-driven banking architecture, the primary banking app publishes domain events when money moves or beneficiaries activate. The <code>notification-service</code> consumes them to send SMS, Emails, or In-App alerts.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4><span class="badge badge-warn">Problem 1</span> Message Failures (Poison Pills)</h4>
+      <p>If the notification consumer fails (e.g. SMTP down, bad JSON), standard Kafka retries indefinitely. The partition blocks, and all subsequent customers stop receiving notifications.</p>
+      <p><strong>Solution (Day 58):</strong> Retry with <strong>Exponential Backoff</strong> (3-4 attempts), then route permanently failed messages to a <strong>Dead-Letter Topic (.DLT)</strong> without stalling the partition.</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge badge-bad">Problem 2</span> Duplicate Processing</h4>
+      <p>Network hiccups after publish, consumer rebalances, or server restarts cause Kafka to deliver the exact same event twice. A customer could get 2-3 emails or debited twice if actions are not idempotent.</p>
+      <p><strong>Solution (Day 59):</strong> Enable <strong>Producer Idempotence</strong> (prevents duplicate writes) and implement <strong>Consumer Deduplication</strong> using a database/Redis unique key guard.</p>
+    </div>
+  </div>
+
+  <!-- SECTION 2: DAY 58 - KAFKA ERROR HANDLING & DLQ -->
+  <h2>2. Day 58: Kafka Error Handling &amp; Dead-Letter Queue (DLQ)</h2>
+
+  <h3>2.1 Transient Failures vs. Poison Pills</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Failure Type</th>
+      <th style="width: 35%;">Typical Examples</th>
+      <th style="width: 40%;">Recommended Handling Strategy</th>
+    </tr>
+    <tr>
+      <td><strong>Transient Errors</strong><br><span class="badge badge-warn">Retryable</span></td>
+      <td>
+        • Email / SMS Gateway timeout (503)<br>
+        • Database connection blip<br>
+        • Network latency
+      </td>
+      <td>
+        Retry with <strong>Exponential Backoff</strong> (e.g. initial delay 1s, multiplier 2.0, max 3 attempts). Allow the downstream dependency time to recover.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Poison Pills</strong><br><span class="badge badge-bad">Non-Retryable</span></td>
+      <td>
+        • Malformed JSON string<br>
+        • Deserialization failure<br>
+        • Missing required fields / NullPointerException
+      </td>
+      <td>
+        <strong>Do NOT retry.</strong> Retrying a deserialization bug 1,000 times will never fix it. Send straight to <strong>.DLT</strong> (Dead Letter Topic) immediately.
+      </td>
+    </tr>
+  </table>
+
+  <h3>2.2 Approach 1: Spring Kafka <code>@RetryableTopic</code> (Modern &amp; Declarative)</h3>
+  <p>Spring Kafka provides <code>@RetryableTopic</code> which automatically creates retry topics (e.g. <code>transaction.completed-retry-1000</code>, <code>transaction.completed-retry-2000</code>) and a final dead-letter topic (<code>transaction.completed-dlt</code>).</p>
+
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / consumer / TransactionEventConsumer.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.kafka.consumer;
+
+<span class="k">import</span> lombok.RequiredArgsConstructor;
+<span class="k">import</span> lombok.extern.slf4j.Slf4j;
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.kafka.consumer.repository.ProcessedEventRepository;
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.kafka.event.TransactionCompletedEvent;
+<span class="k">import</span> org.springframework.kafka.annotation.DltHandler;
+<span class="k">import</span> org.springframework.kafka.annotation.KafkaListener;
+<span class="k">import</span> org.springframework.kafka.annotation.RetryableTopic;
+<span class="k">import</span> org.springframework.kafka.support.KafkaHeaders;
+<span class="k">import</span> org.springframework.messaging.handler.annotation.Header;
+<span class="k">import</span> org.springframework.retry.annotation.Backoff;
+<span class="k">import</span> org.springframework.stereotype.Component;
+<span class="k">import</span> tools.jackson.databind.ObjectMapper;
+
+<span class="a">@Component</span>
+<span class="a">@RequiredArgsConstructor</span>
+<span class="a">@Slf4j</span>
+<span class="k">public class</span> <span class="t">TransactionEventConsumer</span> {
+
+    <span class="k">private static final</span> <span class="t">String</span> TOPIC = <span class="s">"transaction.completed"</span>;
+    <span class="k">private final</span> <span class="t">ObjectMapper</span> objectMapper;
+    <span class="k">private final</span> <span class="t">ProcessedEventRepository</span> processedEventRepository;
+
+    <span class="c">// Day 58: Retry 3 times with exponential backoff (1s -> 2s -> 4s), then route to DLT</span>
+    <span class="a">@RetryableTopic</span>(
+        attempts = <span class="s">"4"</span>,
+        backoff = <span class="a">@Backoff</span>(delay = <span class="s">1000</span>, multiplier = <span class="s">2.0</span>, maxDelay = <span class="s">10000</span>),
+        autoCreateTopics = <span class="s">"true"</span>,
+        exclude = { <span class="t">IllegalArgumentException</span>.<span class="k">class</span>, <span class="t">NullPointerException</span>.<span class="k">class</span> }
+    )
+    <span class="a">@KafkaListener</span>(topics = TOPIC, groupId = <span class="s">"${spring.kafka.consumer.group-id:banking-consumer-group}"</span>)
+    <span class="k">public void</span> <span class="m">consumeTransactionCompleted</span>(
+            <span class="t">String</span> message,
+            <span class="a">@Header</span>(<span class="t">KafkaHeaders</span>.RECEIVED_TOPIC) <span class="t">String</span> topic,
+            <span class="a">@Header</span>(<span class="t">KafkaHeaders</span>.RECEIVED_PARTITION) <span class="k">int</span> partition,
+            <span class="a">@Header</span>(<span class="t">KafkaHeaders</span>.OFFSET) <span class="k">long</span> offset) {
+        
+        log.info(<span class="s">"Received transaction event from topic: {}, partition: {}, offset: {}"</span>, topic, partition, offset);
+
+        <span class="k">try</span> {
+            <span class="t">TransactionCompletedEvent</span> event = objectMapper.readValue(message, <span class="t">TransactionCompletedEvent</span>.<span class="k">class</span>);
+
+            <span class="c">// Day 59 Idempotency Check</span>
+            <span class="k">if</span> (processedEventRepository.existsByEventId(event.getEventId())) {
+                log.warn(<span class="s">"IDEMPOTENCY TRIGGERED: Event {} already processed. Skipping duplicate."</span>, event.getEventId());
+                <span class="k">return</span>;
+            }
+
+            <span class="c">// Business logic (e.g. log, send notification, audit)</span>
+            log.info(<span class="s">"Processing transaction completed for account: {}, amount: {}"</span>,
+                    event.getAccountNumber(), event.getAmount());
+
+        } <span class="k">catch</span> (<span class="t">Exception</span> e) {
+            log.error(<span class="s">"Failed to process message from topic: {}"</span>, topic, e);
+            <span class="k">throw new</span> <span class="t">RuntimeException</span>(e); <span class="c">// Re-throw so @RetryableTopic handles retry & DLT</span>
+        }
+    }
+
+    <span class="c">// Day 58: Handles permanently failed messages landing in Dead Letter Topic</span>
+    <span class="a">@DltHandler</span>
+    <span class="k">public void</span> <span class="m">handleDeadLetter</span>(
+            <span class="t">String</span> failedMessage,
+            <span class="a">@Header</span>(<span class="t">KafkaHeaders</span>.RECEIVED_TOPIC) <span class="t">String</span> topic,
+            <span class="a">@Header</span>(name = <span class="s">"kafka_exception-message"</span>, required = <span class="k">false</span>) <span class="t">String</span> exceptionMsg) {
+        
+        log.error(<span class="s">"ALERT: Message landed in DLT! Topic: {}, Reason: {}, Payload: {}"</span>,
+                topic, exceptionMsg, failedMessage);
+    }
+}</pre>
+
+  <div class="page-break"></div>
+
+  <h3>2.3 Approach 2: Programmatic <code>DefaultErrorHandler</code> + <code>DeadLetterPublishingRecoverer</code></h3>
+  <p>If you prefer a single global configuration bean instead of method-level annotations, configure <code>DefaultErrorHandler</code> directly in the consumer config.</p>
+
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / config / KafkaConsumerConfig.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.kafka.config;
+
+<span class="k">import</span> lombok.extern.slf4j.Slf4j;
+<span class="k">import</span> org.apache.kafka.common.TopicPartition;
+<span class="k">import</span> org.springframework.context.annotation.Bean;
+<span class="k">import</span> org.springframework.context.annotation.Configuration;
+<span class="k">import</span> org.springframework.kafka.core.ConsumerFactory;
+<span class="k">import</span> org.springframework.kafka.core.KafkaOperations;
+<span class="k">import</span> org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+<span class="k">import</span> org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+<span class="k">import</span> org.springframework.kafka.listener.DefaultErrorHandler;
+<span class="k">import</span> org.springframework.util.backoff.ExponentialBackOff;
+
+<span class="a">@Configuration</span>
+<span class="a">@Slf4j</span>
+<span class="k">public class</span> <span class="t">KafkaConsumerConfig</span> {
+
+    <span class="a">@Bean</span>
+    <span class="k">public</span> <span class="t">DefaultErrorHandler</span> <span class="m">errorHandler</span>(<span class="t">KafkaOperations</span>&lt;<span class="t">Object</span>, <span class="t">Object</span>&gt; template) {
+        <span class="c">// 1. DeadLetterPublishingRecoverer: Appends '.DLT' to the original topic name</span>
+        <span class="t">DeadLetterPublishingRecoverer</span> recoverer = <span class="k">new</span> <span class="t">DeadLetterPublishingRecoverer</span>(
+            template,
+            (record, ex) -> {
+                log.error(<span class="s">"Sending message to DLT. Topic: {}, Offset: {}, Error: {}"</span>,
+                        record.topic(), record.offset(), ex.getMessage());
+                <span class="k">return new</span> <span class="t">TopicPartition</span>(record.topic() + <span class="s">".DLT"</span>, record.partition());
+            }
+        );
+
+        <span class="c">// 2. Exponential Backoff: initial 1s, 2x multiplier, 3 retries max</span>
+        <span class="t">ExponentialBackOff</span> backOff = <span class="k">new</span> <span class="t">ExponentialBackOff</span>(<span class="s">1000L</span>, <span class="s">2.0</span>);
+        backOff.setMaxElapsedTime(<span class="s">10000L</span>);
+
+        <span class="t">DefaultErrorHandler</span> errorHandler = <span class="k">new</span> <span class="t">DefaultErrorHandler</span>(recoverer, backOff);
+
+        <span class="c">// 3. Exclude non-retryable exceptions (send to DLT immediately without retrying)</span>
+        errorHandler.addNotRetryableExceptions(
+            <span class="t">org.springframework.kafka.support.serializer.DeserializationException</span>.<span class="k">class</span>,
+            <span class="t">IllegalArgumentException</span>.<span class="k">class</span>
+        );
+
+        <span class="k">return</span> errorHandler;
+    }
+
+    <span class="a">@Bean</span>
+    <span class="k">public</span> <span class="t">ConcurrentKafkaListenerContainerFactory</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; <span class="m">kafkaListenerContainerFactory</span>(
+            <span class="t">ConsumerFactory</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; consumerFactory,
+            <span class="t">DefaultErrorHandler</span> errorHandler) {
+
+        <span class="t">ConcurrentKafkaListenerContainerFactory</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; factory =
+                <span class="k">new</span> <span class="t">ConcurrentKafkaListenerContainerFactory</span>&lt;&gt;();
+        factory.setConsumerFactory(consumerFactory);
+        factory.setCommonErrorHandler(errorHandler); <span class="c">// Attach error handler with DLQ</span>
+        <span class="k">return</span> factory;
+    }
+}</pre>
+
+  <!-- SECTION 3: DAY 59 - CONSUMER GROUPS & IDEMPOTENCY -->
+  <h2>3. Day 59: Consumer Groups &amp; Idempotency</h2>
+
+  <h3>3.1 Producer-Side Idempotency</h3>
+  <p>In the banking app (<code>Enterprise-Digital-Banking-System</code>), the producer must never produce duplicate events when network retries occur.</p>
+  <div class="note">
+    <strong>How Kafka Producer Idempotence Works:</strong> The broker assigns a unique <strong>PID</strong> (Producer ID) and an incremental <strong>Sequence Number</strong> to every message batch. If the broker receives a sequence number it already committed, it deduplicates the message and acknowledges it without creating a double entry.
+  </div>
+
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / config / KafkaProducerConfig.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.kafka.config;
+
+<span class="k">import</span> org.apache.kafka.clients.producer.ProducerConfig;
+<span class="k">import</span> org.apache.kafka.common.serialization.StringSerializer;
+<span class="k">import</span> org.springframework.beans.factory.annotation.Value;
+<span class="k">import</span> org.springframework.context.annotation.Bean;
+<span class="k">import</span> org.springframework.context.annotation.Configuration;
+<span class="k">import</span> org.springframework.kafka.core.DefaultKafkaProducerFactory;
+<span class="k">import</span> org.springframework.kafka.core.KafkaTemplate;
+<span class="k">import</span> org.springframework.kafka.core.ProducerFactory;
+
+<span class="k">import</span> java.util.HashMap;
+<span class="k">import</span> java.util.Map;
+
+<span class="a">@Configuration</span>
+<span class="k">public class</span> <span class="t">KafkaProducerConfig</span> {
+
+    <span class="a">@Value</span>(<span class="s">"${spring.kafka.bootstrap-servers}"</span>)
+    <span class="k">private</span> <span class="t">String</span> bootstrapServers;
+
+    <span class="a">@Bean</span>
+    <span class="k">public</span> <span class="t">ProducerFactory</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; <span class="m">producerFactory</span>() {
+        <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">Object</span>&gt; config = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+        config.put(<span class="t">ProducerConfig</span>.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(<span class="t">ProducerConfig</span>.KEY_SERIALIZER_CLASS_CONFIG, <span class="t">StringSerializer</span>.<span class="k">class</span>);
+        config.put(<span class="t">ProducerConfig</span>.VALUE_SERIALIZER_CLASS_CONFIG, <span class="t">StringSerializer</span>.<span class="k">class</span>);
+
+        <span class="c">// =========================================================================</span>
+        <span class="c">// Day 59: Enable Producer Idempotence & Safe Delivery Guarantee</span>
+        <span class="c">// =========================================================================</span>
+        config.put(<span class="t">ProducerConfig</span>.ENABLE_IDEMPOTENCE_CONFIG, <span class="k">true</span>);      <span class="c">// Exactly-once per partition</span>
+        config.put(<span class="t">ProducerConfig</span>.ACKS_CONFIG, <span class="s">"all"</span>);                     <span class="c">// Wait for all in-sync replicas</span>
+        config.put(<span class="t">ProducerConfig</span>.RETRIES_CONFIG, <span class="t">Integer</span>.MAX_VALUE);      <span class="c">// Retry until broker accepts</span>
+        config.put(<span class="t">ProducerConfig</span>.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, <span class="s">5</span>); <span class="c">// Maintains ordered delivery</span>
+
+        <span class="k">return new</span> <span class="t">DefaultKafkaProducerFactory</span>&lt;&gt;(config);
+    }
+
+    <span class="a">@Bean</span>
+    <span class="k">public</span> <span class="t">KafkaTemplate</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; <span class="m">kafkaTemplate</span>(<span class="t">ProducerFactory</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; producerFactory) {
+        <span class="k">return new</span> <span class="t">KafkaTemplate</span>&lt;&gt;(producerFactory);
+    }
+}</pre>
+
+  <div class="page-break"></div>
+
+  <h3>3.2 Consumer-Side Deduplication (Idempotent Consumer)</h3>
+  <p>Producer idempotence does <strong>NOT</strong> protect against consumer duplicates (e.g. consumer finishes sending the email, but crashes right before committing the offset back to Kafka). When a new consumer in the consumer group takes over, it re-reads that message.</p>
+
+  <h4>The Solution: Idempotency Key Guard Table</h4>
+  <p>Every event in our project already carries an <code>eventId</code> (UUID). We record each <code>eventId</code> in a <code>processed_events</code> table inside a database transaction.</p>
+
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / consumer / entity / ProcessedEvent.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.kafka.consumer.entity;
+
+<span class="k">import</span> jakarta.persistence.*;
+<span class="k">import</span> lombok.*;
+<span class="k">import</span> java.time.LocalDateTime;
+
+<span class="a">@Entity</span>
+<span class="a">@Table</span>(name = <span class="s">"processed_events"</span>)
+<span class="a">@Getter</span>
+<span class="a">@Setter</span>
+<span class="a">@NoArgsConstructor</span>
+<span class="a">@AllArgsConstructor</span>
+<span class="a">@Builder</span>
+<span class="k">public class</span> <span class="t">ProcessedEvent</span> {
+
+    <span class="a">@Id</span>
+    <span class="k">private</span> <span class="t">String</span> eventId; <span class="c">// Unique UUID generated by Producer</span>
+
+    <span class="a">@Column</span>(nullable = <span class="k">false</span>)
+    <span class="k">private</span> <span class="t">String</span> eventType; <span class="c">// "TRANSACTION_COMPLETED" or "BENEFICIARY_ACTIVATED"</span>
+
+    <span class="a">@Column</span>(nullable = <span class="k">false</span>)
+    <span class="k">private</span> <span class="t">LocalDateTime</span> processedAt;
+}</pre>
+
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / consumer / repository / ProcessedEventRepository.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.kafka.consumer.repository;
+
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.kafka.consumer.entity.ProcessedEvent;
+<span class="k">import</span> org.springframework.data.jpa.repository.JpaRepository;
+<span class="k">import</span> org.springframework.stereotype.Repository;
+
+<span class="a">@Repository</span>
+<span class="k">public interface</span> <span class="t">ProcessedEventRepository</span> <span class="k">extends</span> <span class="t">JpaRepository</span>&lt;<span class="t">ProcessedEvent</span>, <span class="t">String</span>&gt; {
+    <span class="k">boolean</span> <span class="m">existsByEventId</span>(<span class="t">String</span> eventId);
+}</pre>
+
+  <h4>Consumer Implementation with Deduplication Guard</h4>
+  <div class="file-header">
+    <span>Enterprise-Digital-Banking-System / kafka / consumer / TransactionEventConsumer.java</span>
+    <span>Java</span>
+  </div>
+  <pre class="code"><span class="a">@Component</span>
+<span class="a">@RequiredArgsConstructor</span>
+<span class="a">@Slf4j</span>
+<span class="k">public class</span> <span class="t">TransactionEventConsumer</span> {
+
+    <span class="k">private static final</span> <span class="t">String</span> TOPIC = <span class="s">"transaction.completed"</span>;
+    <span class="k">private final</span> <span class="t">ProcessedEventRepository</span> processedEventRepository;
+    <span class="k">private final</span> <span class="t">ObjectMapper</span> objectMapper;
+
+    <span class="a">@KafkaListener</span>(topics = TOPIC, groupId = <span class="s">"${spring.kafka.consumer.group-id:banking-consumer-group}"</span>)
+    <span class="a">@Transactional</span>
+    <span class="k">public void</span> <span class="m">consumeTransactionCompleted</span>(<span class="t">String</span> payload) {
+        <span class="k">try</span> {
+            <span class="t">TransactionCompletedEvent</span> event = objectMapper.readValue(payload, <span class="t">TransactionCompletedEvent</span>.<span class="k">class</span>);
+            
+            <span class="c">// Day 59 Idempotency Check:</span>
+            <span class="k">if</span> (processedEventRepository.existsByEventId(event.getEventId())) {
+                log.warn(<span class="s">"IDEMPOTENCY TRIGGERED: Event {} already processed. Skipping duplicate."</span>, event.getEventId());
+                <span class="k">return</span>; <span class="c">// Safe exit, do not re-process!</span>
+            }
+
+            <span class="c">// 1. Execute event business logic (e.g. balance check, notification)</span>
+            log.info(<span class="s">"Processing transaction completed for account: {}, amount: {}"</span>,
+                    event.getAccountNumber(), event.getAmount());
+
+            <span class="c">// 2. Mark event as processed in DB</span>
+            <span class="t">ProcessedEvent</span> record = <span class="t">ProcessedEvent</span>.builder()
+                    .eventId(event.getEventId())
+                    .eventType(<span class="s">"TRANSACTION_COMPLETED"</span>)
+                    .processedAt(<span class="t">LocalDateTime</span>.now())
+                    .build();
+            processedEventRepository.save(record);
+
+            log.info(<span class="s">"Successfully processed and recorded event: {}"</span>, event.getEventId());
+
+        } <span class="k">catch</span> (<span class="t">Exception</span> ex) {
+            log.error(<span class="s">"Failed to process transaction event"</span>, ex);
+            <span class="k">throw new</span> <span class="t">RuntimeException</span>(ex); <span class="c">// Re-throw so Kafka retry / DLQ engages</span>
+        }
+    }
+}</pre>
+
+  <div class="page-break"></div>
+
+  <!-- SECTION 4: PROPERTIES CONFIGURATION -->
+  <h2>4. Application Properties Reference</h2>
+
+  <div class="grid2">
+    <div>
+      <h4>Banking Application (Producer)</h4>
+      <div class="file-header">Enterprise-Digital-Banking-System / application.properties</div>
+      <pre class="code"><span class="c"># Kafka Connection</span>
+spring.kafka.bootstrap-servers=localhost:9092
+
+<span class="c"># Producer Idempotence (Day 59)</span>
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.acks=all
+spring.kafka.producer.properties.enable.idempotence=true
+spring.kafka.producer.properties.max.in.flight.requests.per.connection=5</pre>
+    </div>
+    <div>
+      <h4>Notification Service (Consumer)</h4>
+      <div class="file-header">notification-service / application.properties</div>
+      <pre class="code"><span class="c"># Kafka Connection & Consumer Group (Day 59)</span>
+spring.kafka.bootstrap-servers=localhost:9092
+spring.kafka.consumer.group-id=notification-service-group
+spring.kafka.consumer.auto-offset-reset=earliest
+
+<span class="c"># Deserialization with Poison Pill Protection</span>
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+
+<span class="c"># Manual offset commit option (optional)</span>
+spring.kafka.consumer.enable-auto-commit=false
+spring.kafka.listener.ack-mode=RECORD</pre>
+    </div>
+  </div>
+
+  <!-- SECTION 5: STEP-BY-STEP TESTING & VERIFICATION GUIDE -->
+  <h2>5. How to Test &amp; Verify Days 58 &amp; 59</h2>
+
+  <table>
+    <tr>
+      <th style="width: 25%;">Test Case</th>
+      <th style="width: 45%;">How to Perform</th>
+      <th style="width: 30%;">Expected Behavior</th>
+    </tr>
+    <tr>
+      <td><strong>1. Normal Flow</strong></td>
+      <td>Perform a deposit via <code>POST /api/v1/transactions/deposit</code>.</td>
+      <td>Message lands in <code>transaction.completed</code>. Consumer processes it and inserts into <code>processed_events</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>2. Duplicate Event Test (Idempotency)</strong></td>
+      <td>
+        In Kafka UI (<code>http://localhost:8085</code>), open <code>transaction.completed</code>, click <strong>Produce Message</strong>, and paste the exact same JSON payload with the same <code>eventId</code>.
+      </td>
+      <td>
+        Consumer logs:<br>
+        <code>IDEMPOTENCY TRIGGERED: Event ... already processed. Skipping duplicate.</code><br>
+        No duplicate email sent.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>3. Poison Pill / DLT Test (DLQ)</strong></td>
+      <td>
+        In Kafka UI, publish an invalid message to <code>transaction.completed</code> (e.g. <code>{"invalid":"corrupted"}</code>).
+      </td>
+      <td>
+        Consumer retries 3 times with exponential delays (1s, 2s, 4s). Then message automatically moves into <code>transaction.completed.DLT</code>. Main partition never stalls.
+      </td>
+    </tr>
+  </table>
+
+  <!-- SECTION 6: COMMON GOTCHAS -->
+  <h2>6. Common Gotchas &amp; Best Practices</h2>
+  <div class="card" style="margin-bottom: 3mm;">
+    <h4>1. Avoid the Infinite Retry Loop</h4>
+    <p>If you don't configure <code>exclude = { ... }</code> or add non-retryable exceptions to your error handler, a poison pill will retry forever, spamming CPU and logs. Always exclude <code>DeserializationException</code> and <code>IllegalArgumentException</code>.</p>
+  </div>
+  <div class="card" style="margin-bottom: 3mm;">
+    <h4>2. Transaction Boundaries with Idempotency</h4>
+    <p>Ensure the business operation and the <code>processedEventRepository.save()</code> happen in the same <code>@Transactional</code> method. If the email succeeds but the database fails, the transaction rolls back cleanly.</p>
+  </div>
+  <div class="card">
+    <h4>3. DLT Monitoring</h4>
+    <p>A Dead Letter Queue is only useful if someone monitors it! In <code>docker-compose.yaml</code>, you already have <strong>Kafka UI</strong> on port <code>8085</code>. Regularly inspect topics ending in <code>.DLT</code> to catch failed events.</p>
+  </div>
+
+  <!-- SECTION 7: KAFKA CONCEPTS & ELEMENTS MASTER GUIDE -->
+  <div class="page-break"></div>
+  <h2>7. Kafka Elements, Annotations &amp; Methods: What They Are &amp; Why We Use Them</h2>
+  <p>If you are new to Apache Kafka, this section is your comprehensive companion guide. It explains every single Kafka element, annotation, method, and configuration property used in this project so you understand exactly <strong>what</strong> each line of code does and <strong>why</strong> we use it in a digital banking system.</p>
+
+  <h3>7.1 The End-to-End Event Flow in Our Banking App</h3>
+  <div class="diagram-box">
+  [Customer deposits ₹5,000] &rarr; POST /api/v1/transactions/deposit
+             │
+             ▼
+  1. TransactionServiceImpl updates balance in MySQL &amp; commits ledger entry
+             │
+             ▼
+  2. TransactionEventProducer.publish(event)
+     - Serializes event to JSON String
+     - Sends with Key: accountId.toString()
+             │
+             ▼
+  3. Apache Kafka Broker (KRaft cluster)
+     - Topic: "transaction.completed"
+     - Hashes Key &rarr; routes to Partition (e.g. Partition 1)
+     - Assigns monotonic Offset (e.g. Offset 42)
+     - Acknowledges Producer (acks=all)
+             │
+             ▼
+  4. TransactionEventConsumer (@KafkaListener)
+     - Background thread polls message from Partition 1
+     - Checks Day 59 Idempotency: Has eventId already been processed?
+     - If duplicate &rarr; logs warning and safely skips!
+     - If new &rarr; executes business logic &amp; records eventId in processed_events table
+     - If failure occurs &rarr; Day 58 @RetryableTopic retries with backoff &rarr; moves to .DLT if exhausted
+  </div>
+
+  <h3>7.2 Core Architecture Elements</h3>
+  <table>
+    <tr>
+      <th style="width: 22%;">Element</th>
+      <th style="width: 38%;">What It Is in Kafka</th>
+      <th style="width: 40%;">Why We Use It in This Project</th>
+    </tr>
+    <tr>
+      <td><strong>Topic</strong></td>
+      <td>A named stream / channel of records. Like a mailbox or table of append-only events.</td>
+      <td>
+        We use two dedicated topics:<br>
+        • <code>transaction.completed</code>: Emitted on deposit, withdraw, transfer.<br>
+        • <code>beneficiary.activated</code>: Emitted when a payee is approved.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Partition</strong></td>
+      <td>A topic is split into multiple parallel ordered logs called partitions (we use 3 partitions).</td>
+      <td>
+        <strong>Parallelism &amp; Throughput:</strong> Instead of processing 1 transaction at a time, 3 consumers can process 3 partitions in parallel.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Message Key</strong></td>
+      <td>An optional identifier sent with each record (e.g. <code>accountId</code> or <code>customerId</code>).</td>
+      <td>
+        <strong>Strict Ordering Guarantee:</strong> Kafka hashes the key: <code>hash(key) % numPartitions</code>. All transactions for the same account <strong>always go to the same partition</strong>, guaranteeing deposits and withdrawals for Account #101 are processed in exact chronological order!
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Offset</strong></td>
+      <td>A unique sequential integer (0, 1, 2, 3...) assigned to every message in a partition.</td>
+      <td>
+        <strong>Bookmark / Progress Tracker:</strong> Kafka and the consumer group remember the last committed offset, so if the app restarts, it resumes exactly where it left off without losing messages.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Consumer Group</strong></td>
+      <td>A collection of consumer instances working together under a single group ID (<code>banking-consumer-group</code>).</td>
+      <td>
+        <strong>Load Balancing:</strong> Partitions are automatically divided across instances in the group. If an instance crashes, Kafka rebalances partitions to the surviving instances.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Dead-Letter Topic (DLT / DLQ)</strong></td>
+      <td>A companion topic (e.g. <code>transaction.completed.DLT</code>) for messages that failed all retry attempts.</td>
+      <td>
+        <strong>Poison Pill Isolation:</strong> If a corrupted message fails repeatedly, sending it to DLT allows the main queue to keep flowing without halting operations for healthy customers.
+      </td>
+    </tr>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h3>7.3 Producer Classes, Methods &amp; Properties</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Producer Element</th>
+      <th style="width: 35%;">Code / Configuration</th>
+      <th style="width: 40%;">Purpose &amp; Why We Use It</th>
+    </tr>
+    <tr>
+      <td><strong>KafkaTemplate</strong></td>
+      <td><code>private final KafkaTemplate&lt;String, String&gt; kafkaTemplate;</code></td>
+      <td>
+        Spring's core template wrapper around the Apache Kafka <code>KafkaProducer</code>. Handles thread safety, connection pooling, and callback execution.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>kafkaTemplate.send()</strong></td>
+      <td><code>kafkaTemplate.send(TOPIC, key, payload);</code></td>
+      <td>
+        Asynchronously fires the message to the Kafka broker. Does not block the HTTP request thread, returning control to the caller in &lt; 2 milliseconds.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>ProducerFactory</strong></td>
+      <td><code>public ProducerFactory&lt;String, String&gt; producerFactory() { ... }</code></td>
+      <td>
+        Factory bean responsible for creating raw <code>KafkaProducer</code> instances with the customized properties map.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>StringSerializer</strong></td>
+      <td><code>ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class</code></td>
+      <td>
+        Kafka brokers only store raw byte arrays. This serializer turns our Java <code>String</code> key and JSON payload into network bytes.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>ACKS = "all"</strong></td>
+      <td><code>config.put(ProducerConfig.ACKS_CONFIG, "all");</code></td>
+      <td>
+        <strong>Zero Data Loss:</strong> The broker will not acknowledge receipt until <em>all in-sync replica brokers</em> have committed the record to disk. Crucial for financial data integrity.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>enable.idempotence = true</strong></td>
+      <td><code>config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);</code></td>
+      <td>
+        <strong>Producer-Side Deduplication:</strong> The broker assigns a Producer ID (PID) and sequence number. If a network timeout causes the producer to resend, the broker ignores duplicate sequence numbers.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>max.in.flight.requests = 5</strong></td>
+      <td><code>config.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);</code></td>
+      <td>
+        Allows pipelining up to 5 requests at once for maximum network throughput while keeping in-order delivery guaranteed (when idempotence is enabled).
+      </td>
+    </tr>
+  </table>
+
+  <h3>7.4 Consumer Classes, Annotations &amp; Methods</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Consumer Element</th>
+      <th style="width: 35%;">Code / Configuration</th>
+      <th style="width: 40%;">Purpose &amp; Why We Use It</th>
+    </tr>
+    <tr>
+      <td><strong>@EnableKafka</strong></td>
+      <td><code>@EnableKafka<br>@Configuration<br>public class KafkaConsumerConfig</code></td>
+      <td>
+        Enables Spring Kafka's background annotation-driven listener endpoint infrastructure. Without this, <code>@KafkaListener</code> methods will not be registered.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>@KafkaListener</strong></td>
+      <td><code>@KafkaListener(topics = "transaction.completed", groupId = "banking-consumer-group")</code></td>
+      <td>
+        Spawns a continuous background polling loop. Whenever a new message arrives in the topic, Spring invokes this method and passes the message payload.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>ConcurrentKafkaListener ContainerFactory</strong></td>
+      <td><code>public ConcurrentKafkaListenerContainerFactory&lt;String, String&gt; ...</code></td>
+      <td>
+        Builds the background listener containers. Allows configuring concurrency (multiple consumer threads), custom error handlers, and message converters.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>StringDeserializer</strong></td>
+      <td><code>ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class</code></td>
+      <td>
+        Turns incoming raw network bytes from the broker back into readable Java <code>String</code> JSON text.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>auto.offset.reset = "earliest"</strong></td>
+      <td><code>config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");</code></td>
+      <td>
+        If a new consumer group starts with no committed offset history, <code>earliest</code> forces it to read from message 0, ensuring no historical events are lost.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>@Header(...) Metadata</strong></td>
+      <td><code>@Header(KafkaHeaders.RECEIVED_PARTITION) int partition,<br>@Header(KafkaHeaders.OFFSET) long offset</code></td>
+      <td>
+        Extracts transport metadata from the Kafka record headers into method variables, essential for debugging lag and tracing partition assignments.
+      </td>
+    </tr>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h3>7.5 Day 58 Error Handling &amp; Resilience Annotations</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Resilience Element</th>
+      <th style="width: 35%;">Code / Configuration</th>
+      <th style="width: 40%;">Purpose &amp; Why We Use It</th>
+    </tr>
+    <tr>
+      <td><strong>@RetryableTopic</strong></td>
+      <td><code>@RetryableTopic(attempts = "4", autoCreateTopics = "true")</code></td>
+      <td>
+        <strong>Non-Blocking Retries:</strong> Creates separate retry topics (e.g. <code>topic-retry-1000</code>). Failed messages move to retry topics without blocking other messages in the main topic!
+      </td>
+    </tr>
+    <tr>
+      <td><strong>@Backoff</strong></td>
+      <td><code>backoff = @Backoff(delay = 1000, multiplier = 2.0, maxDelay = 10000)</code></td>
+      <td>
+        <strong>Exponential Backoff:</strong> Attempt 1 waits 1s, Attempt 2 waits 2s, Attempt 3 waits 4s. Prevents overwhelming a downstream system that is already struggling.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>exclude = { ... }</strong></td>
+      <td><code>exclude = { IllegalArgumentException.class }</code></td>
+      <td>
+        <strong>Poison Pill Filter:</strong> Exceptions that can never succeed on retry (like corrupt JSON or invalid arguments) skip retries and go directly to the Dead Letter Topic.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>@DltHandler</strong></td>
+      <td><code>@DltHandler<br>public void handleDeadLetter(...) { ... }</code></td>
+      <td>
+        The final destination method invoked when all 4 retry attempts have failed. Allows logging an alert, notifying devops, or writing to a failed-events audit table.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>DefaultErrorHandler</strong></td>
+      <td><code>new DefaultErrorHandler(recoverer, backOff);</code></td>
+      <td>
+        The programmatic alternative to <code>@RetryableTopic</code>. Configured at the factory level to provide centralized retry and recoverer logic across all consumers.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>DeadLetterPublishing Recoverer</strong></td>
+      <td><code>new DeadLetterPublishingRecoverer(template, ...)</code></td>
+      <td>
+        Helper class used by <code>DefaultErrorHandler</code> to automatically publish failed records to a destination DLT partition.
+      </td>
+    </tr>
+  </table>
+
+  <h3>7.6 Day 59 Idempotency &amp; Deduplication Elements</h3>
+  <table>
+    <tr>
+      <th style="width: 25%;">Idempotency Element</th>
+      <th style="width: 35%;">Code / Configuration</th>
+      <th style="width: 40%;">Purpose &amp; Why We Use It</th>
+    </tr>
+    <tr>
+      <td><strong>eventId (UUID)</strong></td>
+      <td><code>private String eventId; // in event DTO</code></td>
+      <td>
+        A unique identifier generated at the instant the transaction is created (e.g. <code>UUID.randomUUID().toString()</code>). Acts as the event's permanent fingerprint.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>ProcessedEvent (Entity)</strong></td>
+      <td><code>@Entity @Table(name = "processed_events")<br>public class ProcessedEvent { @Id String eventId; ... }</code></td>
+      <td>
+        A dedicated database table storing previously consumed event IDs. Serves as our persistent deduplication guard.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>existsByEventId()</strong></td>
+      <td><code>if (processedEventRepository.existsByEventId(eventId)) return;</code></td>
+      <td>
+        <strong>Idempotency Short-Circuit:</strong> If Kafka re-delivers an event after a consumer crash or rebalance, this check detects it, logs a warning, and safely skips execution.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>@Transactional Boundary</strong></td>
+      <td><code>@Transactional<br>public void consumeTransactionCompleted(...) { ... }</code></td>
+      <td>
+        Ensures that executing the business action and saving the <code>ProcessedEvent</code> record succeed or fail together as an atomic database unit.
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+
