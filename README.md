@@ -15,5 +15,7 @@ Enterprise Digital Banking System is a backend banking application built using S
 - RESTful APIs
 - Database Integration with MySQL
 - Event-Driven Notification Microservice (Apache Kafka)
+- Adding Spring AI for Customer expense tracker and suggester
+- One layer will added purpose of that layer to act as a translater between the Ai and customer details so that user privacy can be preserved 
 fidently explain the project in interviews
 
