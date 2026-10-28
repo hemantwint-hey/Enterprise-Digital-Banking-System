@@ -24,6 +24,15 @@ public class KafkaProducerConfig {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        // =========================================================================
+        // Day 59: Enable Producer Idempotence & Safe Delivery Guarantee
+        // =========================================================================
+        config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);          // Exactly-once per partition
+        config.put(ProducerConfig.ACKS_CONFIG, "all");                         // Wait for all in-sync replicas
+        config.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);          // Retry until broker accepts
+        config.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);   // Maintains ordered delivery
+
         return new DefaultKafkaProducerFactory<>(config);
     }
 
