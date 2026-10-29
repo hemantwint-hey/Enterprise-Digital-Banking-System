@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.enterprisedigitalbankingsystem.kafka.consumer.entity.ProcessedEvent;
 import org.example.enterprisedigitalbankingsystem.kafka.consumer.repository.ProcessedEventRepository;
 import org.example.enterprisedigitalbankingsystem.kafka.event.TransactionCompletedEvent;
+import org.example.enterprisedigitalbankingsystem.notification.service.NotificationService;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.BackOff;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -25,6 +27,7 @@ public class TransactionEventConsumer {
     private static final String TOPIC = "transaction.completed";
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
+    private final NotificationService notificationService;
 
     // Day 58: Retry 3 times with exponential backoff (1s -> 2s -> 4s), then route to DLT
     @RetryableTopic(
@@ -46,17 +49,26 @@ public class TransactionEventConsumer {
         try {
             TransactionCompletedEvent event = objectMapper.readValue(message, TransactionCompletedEvent.class);
 
+            // Day 62: MDC correlation context tracking
+            MDC.put("traceId", event.getEventId());
+            if (event.getEmail() != null) {
+                MDC.put("userId", event.getEmail());
+            } else if (event.getUserId() != null) {
+                MDC.put("userId", event.getUserId());
+            }
+
             // Day 59 Idempotency Check:
             if (processedEventRepository.existsByEventId(event.getEventId())) {
                 log.warn("IDEMPOTENCY TRIGGERED: Event {} already processed. Skipping duplicate.", event.getEventId());
                 return; // Safe exit, do not re-process!
             }
 
-            // 1. Execute event business logic (e.g. balance check, notification)
+            // Day 61: Execute async notification business logic
             log.info("Processing transaction completed for account: {}, amount: {}",
                     event.getAccountNumber(), event.getAmount());
+            notificationService.sendTransactionNotification(event);
 
-            // 2. Mark event as processed in DB
+            // Mark event as processed in DB
             ProcessedEvent record = ProcessedEvent.builder()
                     .eventId(event.getEventId())
                     .eventType("TRANSACTION_COMPLETED")
@@ -70,6 +82,8 @@ public class TransactionEventConsumer {
             log.error("Failed to process message from topic: {}", topic, e);
             // Re-throw so @RetryableTopic handles retry & DLT
             throw new RuntimeException(e);
+        } finally {
+            MDC.clear();
         }
     }
 
@@ -84,4 +98,3 @@ public class TransactionEventConsumer {
                 topic, exceptionMsg, failedMessage);
     }
 }
-

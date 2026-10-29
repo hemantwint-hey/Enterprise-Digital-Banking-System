@@ -5,6 +5,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.example.enterprisedigitalbankingsystem.common.logging.MdcLoggingFilter;
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -66,7 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     userDetails,
                                     null,
                                     userDetails.getAuthorities()
-                            );
+                                    );
 
                     // Step 9: Attach request details
                     authentication.setDetails(
@@ -77,6 +79,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // Step 10: Store authentication in SecurityContext
                     SecurityContextHolder.getContext()
                             .setAuthentication(authentication);
+
+                    // Day 62: Track authenticated user in MDC for log correlation
+                    MDC.put(MdcLoggingFilter.USER_ID_KEY, email);
                 }
             }
         } catch (JwtException | UsernameNotFoundException ex) {
