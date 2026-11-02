@@ -15,6 +15,7 @@ This document is automatically loaded by the AI assistant across all sessions to
   * `kafka`: Event-driven messaging for transactions and beneficiary activations.
   * `notification`: Asynchronous customer alerts and notification dispatching.
   * `common.logging`: MDC distributed trace correlation and structured Logback configuration.
+  * `common.health`: Actuator production health indicators & infrastructure liveness/readiness probes.
 
 ---
 
@@ -36,24 +37,27 @@ This document is automatically loaded by the AI assistant across all sessions to
 * **Day 61: Async Notification Review & End-to-End Pipeline Verification**
   * **Async Notification Service**: Implemented `NotificationService` and `NotificationServiceImpl` for dispatching transaction and beneficiary activation customer alerts.
   * **Consumer Notification Integration**: Wired `NotificationService` into `TransactionEventConsumer` and `BeneficiaryEventConsumer`, triggered only after passing the Idempotency Key Guard (`ProcessedEventRepository.existsByEventId()`).
-  * **End-to-End Verification Test Suite**: Added 15 comprehensive tests (`TransactionEventConsumerTest`, `BeneficiaryEventConsumerTest`, `NotificationServiceImplTest`, `EndToEndKafkaPipelineVerificationTest`) verifying the entire pipeline (Producer -> Serialization -> Broker Topic -> Consumer -> Idempotency Guard -> Notification Dispatch -> Database Record -> Poison Pill Re-throw -> DLT).
+  * **End-to-End Verification Test Suite**: Added 15 comprehensive tests verifying the entire pipeline (Producer -> Serialization -> Broker Topic -> Consumer -> Idempotency Guard -> Notification Dispatch -> Database Record -> Poison Pill Re-throw -> DLT).
 * **Day 62: Structured Logging with Logback & MDC Tracing**
   * **Logback Configuration**: Added `src/main/resources/logback-spring.xml` configuring colorized console output, daily rolling file appender (`logs/banking-app.log`, 10MB/file, 30 days history, 1GB cap), dedicated error log file (`logs/banking-app-error.log`, 60 days history), and granular log levels (App: `INFO`, SQL/Hibernate: `DEBUG`, Spring/Kafka: `WARN`).
   * **Distributed MDC Tracing**: Implemented `MdcLoggingFilter` (extracts or generates 16-char `traceId`, returns `X-Correlation-ID` header, sets default `anonymous` user). Attached authenticated email to MDC in `JwtAuthenticationFilter`. Bound Kafka `eventId` and `userId` in `TransactionEventConsumer` and `BeneficiaryEventConsumer`.
-  * **Test Coverage**: Added `MdcLoggingFilterTest` (54 total unit tests passing).
+* **Day 63: Spring Boot Actuator Production Health & Custom Health Indicators**
+  * **Actuator Configuration**: Configured `management.endpoint.health.show-details=always`, `management.endpoint.health.probes.enabled=true` (Liveness & Readiness probes), and app info exposure in `application.properties`.
+  * **Security Whitelist**: Permitted `/actuator/health/**` and `/actuator/info` without authentication in `SecurityConfig.java` to support unauthenticated load balancer & Kubernetes probes.
+  * **Custom Banking Health Indicator**: Implemented `BankingServiceHealthIndicator` aggregating live connectivity checks for MySQL (`DataSource`), Redis (`RedisConnectionFactory.getConnection().ping()`), and Kafka (`AdminClient.describeCluster()`).
+  * **Unit Test Suite**: Created `BankingServiceHealthIndicatorTest` with 4 comprehensive test cases (58 total project tests passing).
 
 ---
 
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 63: Spring Boot Actuator Production Health & Custom Health Indicators**
-  * Deep dive into Actuator endpoints: `/actuator/health`, `/actuator/info`, `/actuator/metrics`.
-  * Configure `management.endpoint.health.show-details=always` and `management.endpoint.health.probes.enabled=true` (Liveness & Readiness probes).
-  * Implement custom `BankingServiceHealthIndicator` (checks critical dependencies: DB connectivity, Redis cache latency, Kafka broker status, and ledger balance integrity).
+* **Day 64: Prometheus Integration & Metrics Scraping**
+  * Add `micrometer-registry-prometheus` dependency in `pom.xml`.
+  * Expose and verify `/actuator/prometheus` scraping endpoint.
+  * Create `prometheus.yml` configuration scraping the banking application metrics at 5s/15s intervals.
 
 ### 📅 Upcoming Days:
-* **Day 64**: Prometheus Integration (`micrometer-registry-prometheus`, `/actuator/prometheus`, `prometheus.yml` scraper configuration).
 * **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, importing JVM/Micrometer Dashboard ID 4701 and custom banking KPIs).
 
 ---

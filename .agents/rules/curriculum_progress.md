@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 62 Completed
+## Project Status: Through Day 63 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -26,8 +26,12 @@
    - Created `MdcLoggingFilter` for HTTP `X-Correlation-ID` extraction/generation and response header propagation.
    - Wired user email tracking into MDC via `JwtAuthenticationFilter` and eventId/userId into MDC via `TransactionEventConsumer` and `BeneficiaryEventConsumer`.
    - Added `MdcLoggingFilterTest` (54 tests passing).
+7. **Day 63: Spring Boot Actuator Production Health & Custom Health Indicators**:
+   - Configured `management.endpoint.health.show-details=always`, `management.endpoint.health.probes.enabled=true`, and app metadata in `application.properties`.
+   - Whitelisted `/actuator/health/**` and `/actuator/info` in `SecurityConfig.java`.
+   - Implemented custom `BankingServiceHealthIndicator` verifying connectivity to MySQL (`DataSource`), Redis (`RedisConnectionFactory`), and Kafka (`AdminClient`).
+   - Created `BankingServiceHealthIndicatorTest` (58 total tests passing).
 
 ### What We Need to Do Next:
-- **Day 63**: Spring Boot Actuator Production Health (`show-details=always`, `/actuator/health`, custom `BankingServiceHealthIndicator`, Liveness/Readiness probes).
-- **Day 64**: Prometheus integration (`micrometer-registry-prometheus`, `/actuator/prometheus`).
-- **Day 65**: Grafana dashboards (port 3000, dashboard ID 4701).
+- **Day 64**: Prometheus Integration (`micrometer-registry-prometheus`, `/actuator/prometheus`, `prometheus.yml`).
+- **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, connecting Prometheus, JVM/banking metrics dashboard).
