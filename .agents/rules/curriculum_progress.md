@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 63 Completed
+## Project Status: Through Day 64 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -31,7 +31,10 @@
    - Whitelisted `/actuator/health/**` and `/actuator/info` in `SecurityConfig.java`.
    - Implemented custom `BankingServiceHealthIndicator` verifying connectivity to MySQL (`DataSource`), Redis (`RedisConnectionFactory`), and Kafka (`AdminClient`).
    - Created `BankingServiceHealthIndicatorTest` (58 total tests passing).
+8. **Day 64: Prometheus Integration & Metrics Scraping**:
+   - Added `micrometer-registry-prometheus` dependency in `pom.xml`.
+   - Whitelisted `/actuator/prometheus` in `SecurityConfig.java`.
+   - Configured `prometheus.yml` (and `prometheus.yaml`) with `banking-app` job scraping `host.docker.internal:8080/actuator/prometheus` at 5s intervals.
 
 ### What We Need to Do Next:
-- **Day 64**: Prometheus Integration (`micrometer-registry-prometheus`, `/actuator/prometheus`, `prometheus.yml`).
-- **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, connecting Prometheus, JVM/banking metrics dashboard).
+- **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, connecting Prometheus data source, JVM dashboard ID 4701, custom banking metrics panels).

@@ -27,8 +27,13 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // Permit public authentication & Actuator health/info endpoints (Day 63)
-                        .requestMatchers("/auth/**", "/actuator/health/**", "/actuator/info").permitAll()
+                        // Permit public authentication, Actuator health/info, and Prometheus scraping (Days 63 & 64)
+                        .requestMatchers(
+                                "/auth/**",
+                                "/actuator/health/**",
+                                "/actuator/info",
+                                "/actuator/prometheus"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

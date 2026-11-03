@@ -5,7 +5,7 @@ This document is automatically loaded by the AI assistant across all sessions to
 ---
 
 ## 1. Project Overview & Architecture
-* **Stack**: Java 17, Spring Boot (4.x / Spring 7), MySQL, Redis, Apache Kafka (KRaft), Spring Security (JWT).
+* **Stack**: Java 17, Spring Boot (4.x / Spring 7), MySQL, Redis, Apache Kafka (KRaft), Spring Security (JWT), Prometheus.
 * **Package Base**: `org.example.enterprisedigitalbankingsystem`
 * **Core Domains**:
   * `auth` / `security`: JWT authentication, role-based access control.
@@ -43,22 +43,23 @@ This document is automatically loaded by the AI assistant across all sessions to
   * **Distributed MDC Tracing**: Implemented `MdcLoggingFilter` (extracts or generates 16-char `traceId`, returns `X-Correlation-ID` header, sets default `anonymous` user). Attached authenticated email to MDC in `JwtAuthenticationFilter`. Bound Kafka `eventId` and `userId` in `TransactionEventConsumer` and `BeneficiaryEventConsumer`.
 * **Day 63: Spring Boot Actuator Production Health & Custom Health Indicators**
   * **Actuator Configuration**: Configured `management.endpoint.health.show-details=always`, `management.endpoint.health.probes.enabled=true` (Liveness & Readiness probes), and app info exposure in `application.properties`.
-  * **Security Whitelist**: Permitted `/actuator/health/**` and `/actuator/info` without authentication in `SecurityConfig.java` to support unauthenticated load balancer & Kubernetes probes.
+  * **Security Whitelist**: Permitted `/actuator/health/**` and `/actuator/info` without authentication in `SecurityConfig.java`.
   * **Custom Banking Health Indicator**: Implemented `BankingServiceHealthIndicator` aggregating live connectivity checks for MySQL (`DataSource`), Redis (`RedisConnectionFactory.getConnection().ping()`), and Kafka (`AdminClient.describeCluster()`).
   * **Unit Test Suite**: Created `BankingServiceHealthIndicatorTest` with 4 comprehensive test cases (58 total project tests passing).
+* **Day 64: Prometheus Integration & Metrics Scraping**
+  * **Dependency**: Added `io.micrometer:micrometer-registry-prometheus` in `pom.xml`.
+  * **Security Access**: Configured `/actuator/prometheus` in `SecurityConfig.java` to permit unauthenticated metrics scraping.
+  * **Scraper Config**: Created `prometheus.yml` (and `prometheus.yaml`) configuring `banking-app` job to scrape metrics every 5 seconds at `host.docker.internal:8080/actuator/prometheus`.
 
 ---
 
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 64: Prometheus Integration & Metrics Scraping**
-  * Add `micrometer-registry-prometheus` dependency in `pom.xml`.
-  * Expose and verify `/actuator/prometheus` scraping endpoint.
-  * Create `prometheus.yml` configuration scraping the banking application metrics at 5s/15s intervals.
-
-### 📅 Upcoming Days:
-* **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, importing JVM/Micrometer Dashboard ID 4701 and custom banking KPIs).
+* **Day 65: Grafana Dashboards**
+  * Launch Grafana (port 3000) connecting to Prometheus data source.
+  * Import JVM & Micrometer Dashboard (ID: 4701) to observe heap memory, threads, garbage collection, and latency.
+  * Build custom banking business KPI panels (transaction throughput, transfer failures, and Kafka consumer lag).
 
 ---
 
