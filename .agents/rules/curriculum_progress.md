@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 64 Completed
+## Project Status: Through Day 66 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -35,6 +35,16 @@
    - Added `micrometer-registry-prometheus` dependency in `pom.xml`.
    - Whitelisted `/actuator/prometheus` in `SecurityConfig.java`.
    - Configured `prometheus.yml` (and `prometheus.yaml`) with `banking-app` job scraping `host.docker.internal:8080/actuator/prometheus` at 5s intervals.
+9. **Day 65: Grafana Dashboards & Telemetry Visualization**:
+   - Added `prometheus` (port 9090) and `grafana` (port 3000) services to `docker-compose.yaml`.
+   - Created automatic datasource provisioning (`docker/grafana/provisioning/datasources/prometheus-datasource.yml`).
+   - Prepared standard JVM Micrometer dashboard (ID 4701) and banking business PromQL queries.
+10. **Day 66: Docker (`Dockerfile`) & Distributed Tracing**:
+    - Created multi-stage `Dockerfile` (`eclipse-temurin:21` builder + runner) with non-root security user and JVM container memory flags, plus `.dockerignore`.
+    - Added `micrometer-tracing-bridge-otel` and `opentelemetry-exporter-zipkin` to `pom.xml`.
+    - Added `zipkin` service to `docker-compose.yaml` (port 9411).
+    - Configured trace sampling, Zipkin endpoint, and Kafka observation in `application.properties`.
+    - Harmonized `MdcLoggingFilter` with Micrometer `Tracer` and updated `MdcLoggingFilterTest` (60 tests passing).
 
 ### What We Need to Do Next:
-- **Day 65**: Grafana Dashboards (Docker Grafana on port 3000, connecting Prometheus data source, JVM dashboard ID 4701, custom banking metrics panels).
+- **Day 67**: Docker Compose Full-Stack Orchestration (Connecting the Banking App container to Database + Redis + Kafka + Prometheus + Grafana + Zipkin).

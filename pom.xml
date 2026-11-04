@@ -122,6 +122,17 @@
             <version>0.12.6</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- Day 66: Distributed Tracing with OpenTelemetry Bridge -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <!-- Day 66: Zipkin Trace Exporter -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-zipkin</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

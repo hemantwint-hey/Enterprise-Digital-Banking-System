@@ -1,5 +1,8 @@
 package org.example.enterprisedigitalbankingsystem.common.logging;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
 
@@ -71,6 +75,35 @@ class MdcLoggingFilterTest {
         mdcLoggingFilter.doFilterInternal(request, response, filterChain);
 
         verify(response, times(1)).setHeader(eq("X-Correlation-ID"), anyString());
+        assertThat(MDC.get(MdcLoggingFilter.TRACE_ID_KEY)).isNull();
+    }
+
+    @Test
+    @DisplayName("Should extract traceId from Micrometer Tracer when active span exists")
+    @SuppressWarnings("unchecked")
+    void shouldExtractTraceIdFromTracer() throws ServletException, IOException {
+        Tracer tracer = mock(Tracer.class);
+        Span span = mock(Span.class);
+        TraceContext traceContext = mock(TraceContext.class);
+        ObjectProvider<Tracer> provider = mock(ObjectProvider.class);
+
+        when(provider.getIfAvailable()).thenReturn(tracer);
+        when(tracer.currentSpan()).thenReturn(span);
+        when(span.context()).thenReturn(traceContext);
+        when(traceContext.traceId()).thenReturn("otel-trace-67890");
+
+        MdcLoggingFilter filterWithTracer = new MdcLoggingFilter(provider);
+
+        doAnswer(invocation -> {
+            assertThat(MDC.get(MdcLoggingFilter.TRACE_ID_KEY)).isEqualTo("otel-trace-67890");
+            assertThat(MDC.get(MdcLoggingFilter.USER_ID_KEY)).isEqualTo("anonymous");
+            return null;
+        }).when(filterChain).doFilter(request, response);
+
+        filterWithTracer.doFilterInternal(request, response, filterChain);
+
+        verify(response, times(1)).setHeader(eq("X-Correlation-ID"), eq("otel-trace-67890"));
+        verify(response, times(1)).setHeader(eq("X-Trace-ID"), eq("otel-trace-67890"));
         assertThat(MDC.get(MdcLoggingFilter.TRACE_ID_KEY)).isNull();
     }
 }

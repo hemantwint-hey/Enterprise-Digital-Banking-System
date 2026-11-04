@@ -1,5 +1,15 @@
 services:
   # =========================================================================
+  # Zipkin (Distributed Tracing UI & Span Collector - Day 66)
+  # Accessible in browser at: http://localhost:9411
+  # =========================================================================
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: banking-zipkin
+    ports:
+      - "9411:9411"
+    restart: unless-stopped
+  # =========================================================================
   # Redis Cache & Session Store
   # Port: 6379 -> Matches spring.data.redis.port=6379
   # =========================================================================
@@ -81,6 +91,47 @@ services:
     restart: unless-stopped
 
   # =========================================================================
+  # Prometheus (Metrics Collector & Time-Series DB - Days 64 & 65)
+  # Accessible in browser at: http://localhost:9090
+  # =========================================================================
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: banking-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # =========================================================================
+  # Grafana (Metrics Visualization & Operational Dashboards - Day 65)
+  # Accessible in browser at: http://localhost:3000 (admin / admin)
+  # =========================================================================
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: banking-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # =========================================================================
   # MySQL Database (Optional Profile: 'db' or 'full')
   # Only starts if explicitly invoked: docker compose --profile db up -d
   # (Prevents port conflict if you already have local MySQL on 3306)
@@ -110,3 +161,7 @@ volumes:
     name: banking_kafka_data
   mysql_data:
     name: banking_mysql_data
+  prometheus_data:
+    name: banking_prometheus_data
+  grafana_data:
+    name: banking_grafana_data

@@ -5,17 +5,18 @@ This document is automatically loaded by the AI assistant across all sessions to
 ---
 
 ## 1. Project Overview & Architecture
-* **Stack**: Java 17, Spring Boot (4.x / Spring 7), MySQL, Redis, Apache Kafka (KRaft), Spring Security (JWT), Prometheus.
+* **Stack**: Java 17, Spring Boot (4.x / Spring 7), MySQL, Redis, Apache Kafka (KRaft), Spring Security (JWT), Prometheus, Grafana.
 * **Package Base**: `org.example.enterprisedigitalbankingsystem`
 * **Core Domains**:
   * `auth` / `security`: JWT authentication, role-based access control.
-  * `customer`, `account`, `card`, `loan`, `ledger`, `audit`: Core digital banking banking operations.
+  * `customer`, `account`, `card`, `loan`, `ledger`, `audit`: Core digital banking operations.
   * `transaction`: Deposits, withdrawals, and fund transfers.
   * `beneficiary`: Payee management and activation.
   * `kafka`: Event-driven messaging for transactions and beneficiary activations.
   * `notification`: Asynchronous customer alerts and notification dispatching.
   * `common.logging`: MDC distributed trace correlation and structured Logback configuration.
   * `common.health`: Actuator production health indicators & infrastructure liveness/readiness probes.
+  * `monitoring`: Prometheus scrapers and Grafana operational/JVM dashboards.
 
 ---
 
@@ -50,16 +51,24 @@ This document is automatically loaded by the AI assistant across all sessions to
   * **Dependency**: Added `io.micrometer:micrometer-registry-prometheus` in `pom.xml`.
   * **Security Access**: Configured `/actuator/prometheus` in `SecurityConfig.java` to permit unauthenticated metrics scraping.
   * **Scraper Config**: Created `prometheus.yml` (and `prometheus.yaml`) configuring `banking-app` job to scrape metrics every 5 seconds at `host.docker.internal:8080/actuator/prometheus`.
+* **Day 65: Grafana Dashboards & Telemetry Visualization**
+  * **Infrastructure Definition**: Added `prometheus` (port 9090) and `grafana` (port 3000) containers into `docker-compose.yaml`.
+  * **Auto-Provisioning**: Created `docker/grafana/provisioning/datasources/prometheus-datasource.yml` so Grafana connects to Prometheus out-of-the-box without manual UI setup.
+  * **Standard JVM Dashboard**: Community dashboard ID `4701` for JVM heap/threads/GC monitoring.
+  * **PromQL KPI Queries**: Defined queries for transaction throughput, HTTP status codes, and Kafka consumer lag.
+* **Day 66: Docker (`Dockerfile`) & Distributed Tracing (OpenTelemetry / Zipkin)**
+  * **Production Dockerfile**: Created multi-stage `Dockerfile` (`eclipse-temurin:21-jdk-alpine` builder + `eclipse-temurin:21-jre-alpine` runner). Configured non-root `bankingUser`, JVM container flags (`-XX:MaxRAMPercentage=75.0`), Actuator healthcheck, and optimized `.dockerignore`.
+  * **Distributed Tracing**: Added `micrometer-tracing-bridge-otel` and `opentelemetry-exporter-zipkin`. Configured 100% trace sampling, Zipkin endpoint (`:9411`), and Kafka W3C trace observation in `application.properties`.
+  * **MDC & Tracer Integration**: Harmonized `MdcLoggingFilter` to extract live OpenTelemetry `traceId` from `Tracer.currentSpan()`, injecting `X-Correlation-ID` and `X-Trace-ID` into response headers.
+  * **Unit Test Suite**: 60 total project tests passing.
 
 ---
 
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 65: Grafana Dashboards**
-  * Launch Grafana (port 3000) connecting to Prometheus data source.
-  * Import JVM & Micrometer Dashboard (ID: 4701) to observe heap memory, threads, garbage collection, and latency.
-  * Build custom banking business KPI panels (transaction throughput, transfer failures, and Kafka consumer lag).
+* **Day 67: Docker Compose Multi-Container Orchestration**
+  * Hooking Banking Application container into `docker-compose.yaml` alongside MySQL, Redis, Kafka, Prometheus, Grafana, and Zipkin.
 
 ---
 
