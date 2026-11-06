@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 66 Completed
+## Project Status: Through Day 68 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -45,6 +45,19 @@
     - Added `zipkin` service to `docker-compose.yaml` (port 9411).
     - Configured trace sampling, Zipkin endpoint, and Kafka observation in `application.properties`.
     - Harmonized `MdcLoggingFilter` with Micrometer `Tracer` and updated `MdcLoggingFilterTest` (60 tests passing).
+11. **Day 67: Docker Compose Multi-Container Orchestration**:
+    - Orchestrated entire 8-service topology in `docker-compose.yaml` (MySQL 8.0, Redis 7, Kafka 3.8.0 KRaft, Kafka-UI, Prometheus, Grafana, Zipkin, Banking App).
+    - Established inter-service network `banking-network` with Docker internal DNS resolution.
+    - Set up service healthchecks and `depends_on` conditions (`service_healthy`) to guarantee resilient startup ordering.
+    - Automated dashboard loading with `docker/grafana/provisioning/dashboards/dashboards.yml`.
+    - Added `.env.example` for environment variable templating and dual-target scraping in `prometheus.yml`.
+12. **Day 68: Spring Profiles (Dev & Prod Profiles)**:
+    - Base `application.properties`: Universal properties, Kafka serializers/idempotency, Project Loom Virtual Threads, fallback `spring.profiles.active=dev`.
+    - `application-dev.properties`: Localhost defaults, Hibernate `ddl-auto=update`, `show-sql=true`, HikariCP pool of 10, verbose `DEBUG` logging, 100% trace sampling.
+    - `application-prod.properties`: Hardened container profile (`ddl-auto=validate`, SQL logging disabled, tuned HikariCP pool of 30 with 15s leak detection, restricted Actuator, strict externalized secrets without defaults, Kafka batch optimization, adaptive 10% trace sampling).
+    - Added `SPRING_PROFILES_ACTIVE=prod` to `docker-compose.yaml` and `.env.example`.
+    - Created `SpringProfilesPropertyVerificationTest` with 3 test cases (63 total project tests passing).
 
 ### What We Need to Do Next:
-- **Day 67**: Docker Compose Full-Stack Orchestration (Connecting the Banking App container to Database + Redis + Kafka + Prometheus + Grafana + Zipkin).
+- **Day 69: CI/CD Pipeline (GitHub Actions / Automated Builds & Testing)**:
+  - Create `.github/workflows/ci.yml` for automated Maven compilation, running unit/integration test suites, and Docker image build verification on every commit/PR.

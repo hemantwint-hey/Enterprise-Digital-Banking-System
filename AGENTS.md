@@ -61,14 +61,32 @@ This document is automatically loaded by the AI assistant across all sessions to
   * **Distributed Tracing**: Added `micrometer-tracing-bridge-otel` and `opentelemetry-exporter-zipkin`. Configured 100% trace sampling, Zipkin endpoint (`:9411`), and Kafka W3C trace observation in `application.properties`.
   * **MDC & Tracer Integration**: Harmonized `MdcLoggingFilter` to extract live OpenTelemetry `traceId` from `Tracer.currentSpan()`, injecting `X-Correlation-ID` and `X-Trace-ID` into response headers.
   * **Unit Test Suite**: 60 total project tests passing.
+* **Day 67: Docker Compose Multi-Container Orchestration**
+  * **Full-Stack Orchestration**: Unified 8 containerized services in `docker-compose.yaml`: MySQL 8.0, Redis 7, Kafka 3.8.0 KRaft, Kafka-UI, Prometheus, Grafana, Zipkin, and the Spring Boot `banking-app`.
+  * **Network & DNS Isolation**: Created dedicated `banking-network` bridge for reliable container communication (`redis:6379`, `kafka:29092`, `zipkin:9411`, `mysql:3306`, `banking-app:8080`).
+  * **Lifecycle & Health Dependencies**: Enforced startup ordering using `depends_on` with `condition: service_healthy` across database, cache, and message broker prior to launching the core banking engine.
+  * **Automated Telemetry**: Configured Grafana dashboard auto-provisioning (`docker/grafana/provisioning/dashboards/dashboards.yml`) and dual-target Prometheus scraping (container + local).
+  * **Configuration Template**: Added `.env.example` for zero-configuration deployments.
 
 ---
 
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 67: Docker Compose Multi-Container Orchestration**
-  * Hooking Banking Application container into `docker-compose.yaml` alongside MySQL, Redis, Kafka, Prometheus, Grafana, and Zipkin.
+* **Day 68: Spring Profiles (Dev & Prod Profiles)**
+  * **Base Profile Harmonization**: Refactored `application.properties` to retain universal configurations (Jackson 3, Kafka serializers/idempotency, Project Loom Virtual Threads) with a safe local fallback `spring.profiles.active=dev`.
+  * **Development Profile (`application-dev.properties`)**: Configured for local development (`localhost` services, Hibernate `ddl-auto=update`, `show-sql=true`, small HikariCP pool of 10, verbose `DEBUG` logging, and 100% trace sampling).
+  * **Production Profile (`application-prod.properties`)**: Hardened for enterprise containers (`validate` DDL, SQL logging disabled, tuned HikariCP pool of 30 with 15s leak detection, restricted Actuator to `health,info,prometheus`, strict externalized `${DB_USERNAME}`, `${DB_PASSWORD}`, and `${JWT_SECRET}` with zero hardcoded fallbacks, Kafka producer linger/batch optimization, and adaptive 10% trace sampling).
+  * **Container Orchestration**: Updated `docker-compose.yaml` with `SPRING_PROFILES_ACTIVE=prod` and `.env.example` template.
+  * **Unit Test Suite**: Created `SpringProfilesPropertyVerificationTest` with 3 test cases validating profile segregation and properties (63 total project tests passing).
+
+---
+
+## 3. Next Up on the Roadmap
+
+### 🎯 Immediate Next Step:
+* **Day 69: CI/CD Pipeline (GitHub Actions / Automated Builds & Testing)**
+  * Setting up automated workflows for building, testing, linting, and Docker container packaging on push and PR.
 
 ---
 

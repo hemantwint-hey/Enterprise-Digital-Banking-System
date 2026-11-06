@@ -1,0 +1,93 @@
+name: Enterprise Digital Banking CI/CD Pipeline
+
+# =============================================================================
+# Trigger Events
+# Runs on every push or pull request targeted at 'master' or 'main' branches.
+# Also allows manual execution from the GitHub Actions tab (workflow_dispatch).
+# =============================================================================
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+# =============================================================================
+# Pipeline Jobs
+# =============================================================================
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Stage 1: Build, Compile & Automated Test Suite
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    name: Java 21 Build & Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Clone the repository onto the runner VM
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Eclipse Temurin JDK 21 and activate Maven dependency caching
+      - name: Set up Java 21 (Eclipse Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      # Step 3: Ensure Maven wrapper script has Linux execution permissions
+      - name: Grant Execute Permission to Maven Wrapper
+        run: chmod +x mvnw
+
+      # Step 4: Compile project source code in batch mode
+      - name: Compile Application
+        run: ./mvnw compile -B
+
+      # Step 5: Execute all unit and property verification tests (63 tests)
+      - name: Run Unit & Property Verification Tests
+        run: ./mvnw test -B
+
+      # Step 6: Package production executable JAR artifact
+      - name: Package Executable JAR
+        run: ./mvnw package -DskipTests -B
+
+      # Step 7: Archive Surefire Test Reports (available for download in GitHub UI)
+      - name: Upload Surefire Test Reports
+        if: always() # Uploads reports even if some tests fail for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-reports
+          path: target/surefire-reports/
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: Multi-Stage Docker Container Build Verification
+  # Guaranteed to run ONLY after Stage 1 (build-and-test) passes successfully.
+  # ---------------------------------------------------------------------------
+  docker-build-verify:
+    name: Docker Multi-Stage Build Verification
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Clone the repository onto the runner VM
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Docker Buildx engine for advanced container caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 3: Validate and build the multi-stage Dockerfile
+      - name: Build Docker Container Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false # Verifies compilation & image integrity without pushing to public registry
+          tags: banking-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
