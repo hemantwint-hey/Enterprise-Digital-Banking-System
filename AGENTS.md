@@ -91,8 +91,20 @@ This document is automatically loaded by the AI assistant across all sessions to
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 70: Kubernetes Deployment (K8s Manifests: Deployments, Services, ConfigMaps, Secrets, Probes)**
-  * Authoring Kubernetes production deployment manifests: Pod specs, multi-replica scaling, ClusterIP services, ConfigMaps, Secrets, and Actuator Liveness/Readiness probe bindings.
+* **Day 70: Database Optimization: Indexes & Constraints**
+  * **Flyway Migration V2 (`V2__add_indexes_and_constraints.sql`)**: Authored versioned migration script creating 9 high-performance B-Tree & composite indexes and 7 financial CHECK constraints.
+  * **Composite B-Tree Indexes**: `idx_accounts_customer_id`, `idx_tx_source_created` `(source_account_id, created_at DESC)`, `idx_tx_dest_created` `(destination_account_id, created_at DESC)`, `idx_ledger_account_created`, `idx_beneficiaries_customer`, `idx_loans_customer`, `idx_emis_loan_status`, `idx_audit_entity_search`, and `idx_processed_events_type_time`.
+  * **Strict Financial CHECK Constraints**: Added disk-level integrity checks (`chk_account_balance_non_negative`, `chk_transaction_amount_positive`, `chk_ledger_amount_positive`, `chk_loan_principal_positive`, `chk_loan_interest_non_negative`, `chk_loan_tenure_positive`, `chk_emi_amount_positive`).
+  * **JPA Entity Synchronization**: Synchronized `@Table(indexes = { ... })` across `Account`, `Transaction`, `LedgerEntry`, `Beneficiary`, `Loan`, `Emi`, `AuditLog`, and `ProcessedEvent`.
+  * **Unit Test Suite**: Added `DatabaseOptimizationMigrationTest` verifying V1 and V2 migration DDL integrity (66 total project tests passing).
+
+---
+
+## 3. Next Up on the Roadmap
+
+### 🎯 Immediate Next Step:
+* **Day 71: Transaction Management & Isolation Levels (ACID & Concurrency Control)**
+  * Deep dive into Spring `@Transactional`, isolation levels (`READ_COMMITTED`, `REPEATABLE_READ`, `SERIALIZABLE`), propagation behaviors (`REQUIRED`, `REQUIRES_NEW`), and dirty read / phantom read prevention on monetary transactions.
 
 ---
 

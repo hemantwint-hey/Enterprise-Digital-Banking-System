@@ -7,7 +7,9 @@ import org.example.enterprisedigitalbankingsystem.auth.entity.User;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "audit_logs")
+@Table(name = "audit_logs", indexes = {
+        @Index(name = "idx_audit_entity_search", columnList = "entity_name, entity_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor

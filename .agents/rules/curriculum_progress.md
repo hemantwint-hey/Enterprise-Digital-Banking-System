@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 69 Completed
+## Project Status: Through Day 70 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -64,7 +64,11 @@
     - Integrated Flyway database migration (`flyway-core`, `flyway-mysql`, `V1__init_banking_schema.sql` for 10 entities, and `spring.flyway.baseline-on-migrate=true`).
     - Verified property tests passing with `.\mvnw.cmd test -Dtest=SpringProfilesPropertyVerificationTest`.
 
+14. **Day 70: Database Optimization: Indexes & Constraints**:
+    - Authored Flyway migration `V2__add_indexes_and_constraints.sql` adding 9 composite/B-Tree indexes and 7 financial CHECK constraints.
+    - Synchronized JPA entity `@Table(indexes = { ... })` across all core models.
+    - Created `DatabaseOptimizationMigrationTest` verifying migration DDL integrity (66 total project tests passing).
+
 ### What We Need to Do Next:
-- **Day 70: Kubernetes Deployment (K8s Manifests: Deployments, Services, ConfigMaps, Secrets, Probes)**:
-  - Create Kubernetes manifests for the Digital Banking System (`k8s/deployment.yaml`, `k8s/service.yaml`, `k8s/configmap.yaml`, `k8s/secret.yaml`).
-  - Wire Spring Boot Actuator `/actuator/health/liveness` and `/readiness` probes directly into Kubernetes container health checks.
+- **Day 71: Transaction Management & Isolation Levels (ACID & Concurrency Control)**:
+  - Deep dive into Spring `@Transactional`, isolation levels (`READ_COMMITTED`, `REPEATABLE_READ`, `SERIALIZABLE`), propagation behaviors (`REQUIRED`, `REQUIRES_NEW`), and dirty read / phantom read prevention on monetary transactions.

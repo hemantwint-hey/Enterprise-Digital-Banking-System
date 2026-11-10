@@ -8,7 +8,9 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Table(name ="loans")
+@Table(name = "loans", indexes = {
+        @Index(name = "idx_loans_customer", columnList = "customer_id, status")
+})
 @Entity
 @Getter
 @Setter

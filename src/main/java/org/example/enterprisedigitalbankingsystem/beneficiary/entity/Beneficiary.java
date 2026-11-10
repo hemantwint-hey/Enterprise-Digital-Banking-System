@@ -12,7 +12,9 @@ import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "beneficiaries")
+@Table(name = "beneficiaries", indexes = {
+        @Index(name = "idx_beneficiaries_customer", columnList = "customer_id, status")
+})
 @Getter
 @Setter
 @AllArgsConstructor

@@ -1,15 +1,14 @@
 package org.example.enterprisedigitalbankingsystem.kafka.consumer.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "processed_events")
+@Table(name = "processed_events", indexes = {
+        @Index(name = "idx_processed_events_type_time", columnList = "event_type, processed_at")
+})
 @Getter
 @Setter
 @NoArgsConstructor
