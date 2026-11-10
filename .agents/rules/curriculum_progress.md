@@ -1,6 +1,6 @@
 # Project Memory: Curriculum State & Completed Days
 
-## Project Status: Through Day 68 Completed
+## Project Status: Through Day 69 Completed
 
 ### History & What We Have Completed:
 1. **Days 1–57**: Full Digital Banking System backend:
@@ -58,6 +58,13 @@
     - Added `SPRING_PROFILES_ACTIVE=prod` to `docker-compose.yaml` and `.env.example`.
     - Created `SpringProfilesPropertyVerificationTest` with 3 test cases (63 total project tests passing).
 
+13. **Day 69: CI/CD Pipeline (GitHub Actions) & Flyway Database Migration**:
+    - Created `.github/workflows/ci.yml` with automated Java 21 build, Maven dependency caching, 63 automated tests, and Docker container build verification.
+    - Added live build status badge to `README.md`.
+    - Integrated Flyway database migration (`flyway-core`, `flyway-mysql`, `V1__init_banking_schema.sql` for 10 entities, and `spring.flyway.baseline-on-migrate=true`).
+    - Verified property tests passing with `.\mvnw.cmd test -Dtest=SpringProfilesPropertyVerificationTest`.
+
 ### What We Need to Do Next:
-- **Day 69: CI/CD Pipeline (GitHub Actions / Automated Builds & Testing)**:
-  - Create `.github/workflows/ci.yml` for automated Maven compilation, running unit/integration test suites, and Docker image build verification on every commit/PR.
+- **Day 70: Kubernetes Deployment (K8s Manifests: Deployments, Services, ConfigMaps, Secrets, Probes)**:
+  - Create Kubernetes manifests for the Digital Banking System (`k8s/deployment.yaml`, `k8s/service.yaml`, `k8s/configmap.yaml`, `k8s/secret.yaml`).
+  - Wire Spring Boot Actuator `/actuator/health/liveness` and `/readiness` probes directly into Kubernetes container health checks.

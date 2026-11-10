@@ -28,6 +28,8 @@ class SpringProfilesPropertyVerificationTest {
         assertThat(baseProps.getProperty("spring.kafka.consumer.group-id")).isEqualTo("banking-consumer-group");
         assertThat(baseProps.getProperty("spring.kafka.producer.acks")).isEqualTo("all");
         assertThat(baseProps.getProperty("spring.kafka.producer.properties.enable.idempotence")).isEqualTo("true");
+        assertThat(baseProps.getProperty("spring.flyway.enabled")).isEqualTo("true");
+        assertThat(baseProps.getProperty("spring.flyway.baseline-on-migrate")).isEqualTo("true");
     }
 
     @Test

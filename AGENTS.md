@@ -79,14 +79,20 @@ This document is automatically loaded by the AI assistant across all sessions to
   * **Production Profile (`application-prod.properties`)**: Hardened for enterprise containers (`validate` DDL, SQL logging disabled, tuned HikariCP pool of 30 with 15s leak detection, restricted Actuator to `health,info,prometheus`, strict externalized `${DB_USERNAME}`, `${DB_PASSWORD}`, and `${JWT_SECRET}` with zero hardcoded fallbacks, Kafka producer linger/batch optimization, and adaptive 10% trace sampling).
   * **Container Orchestration**: Updated `docker-compose.yaml` with `SPRING_PROFILES_ACTIVE=prod` and `.env.example` template.
   * **Unit Test Suite**: Created `SpringProfilesPropertyVerificationTest` with 3 test cases validating profile segregation and properties (63 total project tests passing).
+* **Day 69: CI/CD Pipeline (GitHub Actions) & Flyway Database Migration**
+  * **Automated CI/CD Pipeline**: Configured `.github/workflows/ci.yml` with dual-stage verification:
+    * `build-and-test`: Sets up Java 21 Temurin, Maven dependency caching, compilation, runs all 63 unit/property verification tests, packages production JAR, and uploads Surefire test artifacts.
+    * `docker-build-verify`: Leverages Docker Buildx and GitHub Actions layer caching (`gha`) to validate the multi-stage `Dockerfile`.
+  * **Live Build Status Badge**: Added official GitHub Actions workflow badge to `README.md`.
+  * **Flyway Database Migration**: Added `flyway-core` and `flyway-mysql` dependencies in `pom.xml`, authored `src/main/resources/db/migration/V1__init_banking_schema.sql` defining all 10 core tables with strict relational integrity, and configured `spring.flyway.baseline-on-migrate=true` in `application.properties`.
 
 ---
 
 ## 3. Next Up on the Roadmap
 
 ### 🎯 Immediate Next Step:
-* **Day 69: CI/CD Pipeline (GitHub Actions / Automated Builds & Testing)**
-  * Setting up automated workflows for building, testing, linting, and Docker container packaging on push and PR.
+* **Day 70: Kubernetes Deployment (K8s Manifests: Deployments, Services, ConfigMaps, Secrets, Probes)**
+  * Authoring Kubernetes production deployment manifests: Pod specs, multi-replica scaling, ClusterIP services, ConfigMaps, Secrets, and Actuator Liveness/Readiness probe bindings.
 
 ---
 
