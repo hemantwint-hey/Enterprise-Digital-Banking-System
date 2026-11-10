@@ -7,7 +7,7 @@ services:
     image: mysql:8.0
     container_name: banking-mysql
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_PORT:-3307}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-hemant851311420}
       MYSQL_DATABASE: banking_db
