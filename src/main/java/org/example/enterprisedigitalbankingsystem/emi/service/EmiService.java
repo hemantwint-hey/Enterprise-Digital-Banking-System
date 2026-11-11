@@ -1,12 +1,12 @@
 package org.example.enterprisedigitalbankingsystem.emi.service;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
 import org.example.enterprisedigitalbankingsystem.emi.dto.response.EmiResponse;
 import org.example.enterprisedigitalbankingsystem.loan.entity.Loan;
-
-import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface EmiService {
     void generateSchedule(Loan loan);
-    List<EmiResponse> getEmisByLoanId(Long loanId);
+    PagedResponse<EmiResponse> getEmisByLoanId(Long loanId, Pageable pageable);
     EmiResponse payEmi(Long emiId);
 }

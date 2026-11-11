@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.ledger.entity.EntryType;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -13,7 +15,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class LedgerEntryResponse {
+public class LedgerEntryResponse implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
     private Long id;
     private Long transactionId;
     private Long accountId;

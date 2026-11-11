@@ -1,5 +1,15 @@
 package org.example.enterprisedigitalbankingsystem.account.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.enterprisedigitalbankingsystem.account.dto.request.AccountSearchRequest;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.ModelAttribute;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -20,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @Validated
+@Tag(name = "Accounts", description = "Bank account creation, lifecycle management, and dynamic search APIs")
 @RestController
 @RequestMapping("/api/v1/accounts")
 @RequiredArgsConstructor
@@ -46,10 +57,19 @@ public class AccountController {
             return  ResponseEntity.ok(response);
         }
         @GetMapping("/customer/{customerId}")
-        public ResponseEntity<List<AccountSummaryResponse>>  getAccountByCustomerId(
-                @PathVariable @Positive(message = "Customer id must be positive") Long customerId){
-            List<AccountSummaryResponse> response =  accountService.getAccountsByCustomerId(customerId);
-            return ResponseEntity.ok(response);
+        @Operation(summary = "Get paginated accounts for a customer")
+        public ResponseEntity<PagedResponse<AccountSummaryResponse>> getAccountByCustomerId(
+                @PathVariable @Positive(message = "Customer id must be positive") Long customerId,
+                @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable){
+            return ResponseEntity.ok(accountService.getAccountsByCustomerId(customerId, pageable));
+        }
+
+        @GetMapping("/search")
+        @Operation(summary = "Search accounts dynamically by customer, account number, type, status, branch, and balance range")
+        public ResponseEntity<PagedResponse<AccountSummaryResponse>> searchAccounts(
+                @ParameterObject @Valid @ModelAttribute AccountSearchRequest filter,
+                @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable){
+            return ResponseEntity.ok(accountService.searchAccounts(filter, pageable));
         }
 
         @PutMapping("/{accountId}")

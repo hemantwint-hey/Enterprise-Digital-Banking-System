@@ -98,6 +98,11 @@ This document is automatically loaded by the AI assistant across all sessions to
     * Enhanced `load-test.ps1` with C# high-concurrency engine, real-time progress reporting, and p50/p95/p99 latency distribution tracking.
     * Executed 50,000 requests across 400 concurrent slots: achieved **4,732.38 RPS** (instant peak: **5,202 RPS**) with **100% 200 OK success rate** and 0 errors.
     * Validated full-stack observability in Grafana and Task Manager: CPU saturated at ~95% across all 12 logical processors, JVM platform threads held flat at ~70 via Project Loom Virtual Threads, and heap usage remained stable at ~11.9% (224 MiB).
+* **Day 76: Validation (Bean Validation)**
+  * **Custom KYC Constraint**: Implemented `@MinimumAge` and `MinimumAgeValidator` enforcing 18+ age verification on `LocalDate` fields while delegating `null` checks cleanly to `@NotNull`.
+  * **Global Validation Error Normalization**: Enhanced `ErrorResponse` (`@JsonInclude(NON_NULL)` + `Map<String, String> fieldErrors`, backward-compatible 4-arg constructor) and `GlobalExceptionHandler` to handle `MethodArgumentNotValidException` (field + global `@AssertTrue` errors), `HandlerMethodValidationException` (parameter + cross-parameter errors), `ConstraintViolationException` (leaf property names), `HttpMessageNotReadableException`, and `MethodArgumentTypeMismatchException`.
+  * **DTO & Controller Hardening**: Tightened JSR-380 constraints (`@Positive`, `@DecimalMin`/`@DecimalMax`, `@Digits(integer, fraction)`, `@Size`, `@Past`, `@MinimumAge`, cross-field `@JsonIgnore @AssertTrue`) across all 15 active request DTOs, and added `@Validated` + path-variable constraints across all 8 active REST controllers (`AccountController`, `AuditController`, `BeneficiaryController`, `CustomerController`, `EmiController`, `LedgerController`, `LoanController`, `TransactionController`).
+  * **Unit Test Suite**: Added `BeanValidationRulesTest` (6 tests) and `GlobalExceptionHandlerValidationTest` (5 tests).
 
 ---
 
@@ -107,11 +112,9 @@ This document is automatically loaded by the AI assistant across all sessions to
 * **Days 71–75: Automated Testing Suite** (`docs/roadmap-refs/05-testing.pdf`)
   * Mockito Unit Tests, `@DataJpaTest` Persistence Tests, `@WebMvcTest` Controller Tests, and `@SpringBootTest` End-to-End Integration Tests — paused per user request and scheduled right after Day 79.
 
-### 🎯 Immediate Next Steps (Days 76–79 Notes & Planned Code PDFs Ready):
-* **Day 76: Validation (Bean Validation)** (`docs/2026-11-11-Day76-Bean-Validation.pdf`)
-  * Complete JSR-380 validation (`@Valid`, `@Validated`, `@DecimalMin`, `@Pattern`, `@Positive`), JSON parse & path/param validation error normalization (`HandlerMethodValidationException`, `ConstraintViolationException`, `HttpMessageNotReadableException`).
-* **Day 77: Pagination (`Pageable` APIs)** (`docs/2026-11-11-Day77-Pagination-Pageable-APIs.pdf`)
-  * `PagedResponse<T>` envelope, `@PageableDefault`, Redis cache key inclusion (`page`/`size`/`sort`), and paginated repository/service/controller rollout.
+### 🎯 Immediate Next Steps (Days 77–79 Notes & Planned Code PDFs Ready):
+* **Day 77: Pagination (`Pageable` APIs)** (`docs/2026-11-11-Day77-Pagination-Pageable-APIs.pdf`) — *In Progress (User Implementing)*
+  * Skeleton class body created at `src/main/java/.../common/dto/PagedResponse.java`; user implementing `PagedResponse<T>` logic, `@PageableDefault`, `application.properties` bounds, Redis cache key inclusion (`page`/`size`/`sort`), and paginated repository/service/controller rollout.
 * **Day 78: Sorting Support** (`docs/2026-11-11-Day78-Sorting-Support.pdf`)
   * `SortValidator` field allowlisting, `PropertyReferenceException` handling, deterministic tie-breakers (`id`/`createdAt`), and cleanup of hardcoded `OrderBy...` repository queries.
 * **Day 79: Search (Dynamic Search APIs)** (`docs/2026-11-11-Day79-Dynamic-Search-APIs.pdf`)

@@ -1,5 +1,14 @@
 package org.example.enterprisedigitalbankingsystem.transaction.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.example.enterprisedigitalbankingsystem.transaction.dto.request.TransactionSearchRequest;
+import org.example.enterprisedigitalbankingsystem.transaction.specification.TransactionSpecification;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
@@ -273,20 +282,33 @@ public class TransactionServiceImpl implements TransactionService {
         return transactionMapper.toResponse(transaction);
     }
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "amount", "transactionType", "transactionStatus", "transactionReference"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<TransactionSummaryResponse> getTransactionHistory(Long accountId) {
+    public PagedResponse<TransactionSummaryResponse> getTransactionHistory(Long accountId, Pageable pageable) {
+        if (!accountRepository.existsById(accountId)) {
+            throw new ResourceNotFoundException("Account not found with id:" + accountId);
+        }
 
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Account not found with id:" + accountId
-                        ));
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<TransactionSummaryResponse> page = transactionRepository
+                .findBySourceAccountIdOrDestinationAccountId(accountId, accountId, validatedPageable)
+                .map(transactionMapper::toSummaryResponse);
+        return PagedResponse.from(page);
+    }
 
-       List<Transaction> transactions = transactionRepository.findBySourceAccountIdOrDestinationAccountIdOrderByCreatedAtDesc(
-               accountId, accountId
-       );
-       return transactions.stream().map(transactionMapper::toSummaryResponse)
-               .toList();
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<TransactionSummaryResponse> searchTransactions(
+            TransactionSearchRequest filter, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<TransactionSummaryResponse> page = transactionRepository
+                .findAll(TransactionSpecification.withFilters(filter), validatedPageable)
+                .map(transactionMapper::toSummaryResponse);
+        return PagedResponse.from(page);
     }
 }

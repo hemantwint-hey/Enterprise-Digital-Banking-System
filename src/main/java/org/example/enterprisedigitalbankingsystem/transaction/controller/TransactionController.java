@@ -1,5 +1,15 @@
 package org.example.enterprisedigitalbankingsystem.transaction.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.transaction.dto.request.TransactionSearchRequest;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.ModelAttribute;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -19,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @Validated
+@Tag(name = "Transactions", description = "Deposit, withdrawal, transfer, history, and dynamic search APIs")
 @RestController
 @RequestMapping("/api/v1/transactions")
 @RequiredArgsConstructor
@@ -60,9 +71,18 @@ public class TransactionController {
     }
 
     @GetMapping("/account/{accountId}/history")
-    public ResponseEntity<List<TransactionSummaryResponse>> getTransactionHistory(
-            @PathVariable @Positive(message = "Account id must be positive") Long accountId) {
-      List<TransactionSummaryResponse> response = transactionService.getTransactionHistory(accountId);
-      return ResponseEntity.ok(response);
+    @Operation(summary = "Get paginated transaction history for an account")
+    public ResponseEntity<PagedResponse<TransactionSummaryResponse>> getTransactionHistory(
+            @PathVariable @Positive(message = "Account id must be positive") Long accountId,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(transactionService.getTransactionHistory(accountId, pageable));
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search transactions dynamically by account, reference, type, status, amount, date range, and remarks")
+    public ResponseEntity<PagedResponse<TransactionSummaryResponse>> searchTransactions(
+            @ParameterObject @Valid @ModelAttribute TransactionSearchRequest filter,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(transactionService.searchTransactions(filter, pageable));
     }
 }

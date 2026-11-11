@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -14,7 +16,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class AccountResponse{
+public class AccountResponse implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     private Long accountId;
     private String accountNumber;
     private Long customerId;

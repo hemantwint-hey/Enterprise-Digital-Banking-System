@@ -1,5 +1,14 @@
 package org.example.enterprisedigitalbankingsystem.customer.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.example.enterprisedigitalbankingsystem.customer.dto.request.CustomerSearchRequest;
+import org.example.enterprisedigitalbankingsystem.customer.specification.CustomerSpecification;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.auth.entity.User;
 import org.example.enterprisedigitalbankingsystem.auth.repository.UserRepository;
@@ -80,13 +89,29 @@ public class CustomerServiceImpl implements CustomerService {
         return customerMapper.toResponse(customer);
     }
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "firstName", "lastName", "city", "state", "kycStatus", "createdAt"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<CustomerSummaryResponse> getAllCustomers() {
-        return customerRepository.findAll()
-                .stream()
-                .map(customerMapper::toSummaryResponse)
-                .toList();
+    public PagedResponse<CustomerSummaryResponse> getAllCustomers(Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<CustomerSummaryResponse> page = customerRepository.findAll(validatedPageable)
+                .map(customerMapper::toSummaryResponse);
+        return PagedResponse.from(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<CustomerSummaryResponse> searchCustomers(
+            CustomerSearchRequest filter, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<CustomerSummaryResponse> page = customerRepository
+                .findAll(CustomerSpecification.withFilters(filter), validatedPageable)
+                .map(customerMapper::toSummaryResponse);
+        return PagedResponse.from(page);
     }
 
     @Override

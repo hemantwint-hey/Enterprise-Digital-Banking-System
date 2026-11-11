@@ -1,5 +1,14 @@
 package org.example.enterprisedigitalbankingsystem.audit.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.audit.dto.request.AuditSearchRequest;
+import org.example.enterprisedigitalbankingsystem.audit.specification.AuditSpecification;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.audit.dto.response.AuditLogResponse;
@@ -60,39 +69,60 @@ public class AuditServiceImpl implements AuditService {
         return null;
     }
 
-    private String resolveClientIp() {
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "action", "entityName"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
+    /**
+     * Resolves client IP using servlet remoteAddr. Behind reverse proxies in prod,
+     * server.forward-headers-strategy=native lets Tomcat rewrite remoteAddr from
+     * trusted proxy headers without blindly trusting arbitrary X-Forwarded-For values.
+     */
+    String resolveClientIp() {
         if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
             return null;
         }
-        HttpServletRequest request = attributes.getRequest();
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return attributes.getRequest().getRemoteAddr();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AuditLogResponse> getAllAuditLogs() {
-        return auditRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(auditMapper::toResponse)
-                .toList();
+    public PagedResponse<AuditLogResponse> getAllAuditLogs(Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AuditLogResponse> page = auditRepository.findAll(validatedPageable)
+                .map(auditMapper::toResponse);
+        return PagedResponse.from(page);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AuditLogResponse> getAuditLogsByEntity(String entityName, String entityId) {
-        return auditRepository.findByEntityNameAndEntityIdOrderByCreatedAtDesc(entityName, entityId).stream()
-                .map(auditMapper::toResponse)
-                .toList();
+    public PagedResponse<AuditLogResponse> getAuditLogsByEntity(
+            String entityName, String entityId, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AuditLogResponse> page = auditRepository
+                .findByEntityNameAndEntityId(entityName, entityId, validatedPageable)
+                .map(auditMapper::toResponse);
+        return PagedResponse.from(page);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AuditLogResponse> getAuditLogsByUser(UUID userId) {
-        return auditRepository.findByPerformedBy_UserIdOrderByCreatedAtDesc(userId).stream()
-                .map(auditMapper::toResponse)
-                .toList();
+    public PagedResponse<AuditLogResponse> getAuditLogsByUser(UUID userId, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AuditLogResponse> page = auditRepository
+                .findByPerformedBy_UserId(userId, validatedPageable)
+                .map(auditMapper::toResponse);
+        return PagedResponse.from(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<AuditLogResponse> searchAuditLogs(AuditSearchRequest filter, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AuditLogResponse> page = auditRepository
+                .findAll(AuditSpecification.withFilters(filter), validatedPageable)
+                .map(auditMapper::toResponse);
+        return PagedResponse.from(page);
     }
 }

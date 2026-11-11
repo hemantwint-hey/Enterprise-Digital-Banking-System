@@ -1,5 +1,12 @@
 package org.example.enterprisedigitalbankingsystem.ledger.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.exception.ResourceNotFoundException;
@@ -71,11 +78,18 @@ public class LedgerServiceImpl implements LedgerService {
         }
     }
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "createdAt", "amount", "entryType", "balanceAfterEntry"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<LedgerEntryResponse> getLedgerByAccount(Long accountId) {
-        List<LedgerEntry> entries = ledgerRepository.findByAccountIdOrderByCreatedAtDesc(accountId);
-        return entries.stream().map(ledgerMapper::toResponse).toList();
+    public PagedResponse<LedgerEntryResponse> getLedgerByAccount(Long accountId, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<LedgerEntryResponse> page = ledgerRepository.findByAccountId(accountId, validatedPageable)
+                .map(ledgerMapper::toResponse);
+        return PagedResponse.from(page);
     }
 
     @Override

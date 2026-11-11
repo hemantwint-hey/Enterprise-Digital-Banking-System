@@ -65,7 +65,8 @@ class GlobalExceptionHandlerValidationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getError()).isEqualTo("Validation failed");
+        assertThat(response.getBody().getError())
+                .isEqualTo("amount: Transfer amount must be positive, transferRequest: Provide either destinationAccountId or beneficiaryId");
         assertThat(response.getBody().getPath()).isEqualTo("/api/transactions/transfer");
         assertThat(response.getBody().getFieldErrors())
                 .containsEntry("amount", "Transfer amount must be positive")
@@ -119,7 +120,7 @@ class GlobalExceptionHandlerValidationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getError()).isEqualTo("Constraint violation");
+        assertThat(response.getBody().getError()).isEqualTo("id: Account ID must be a positive number");
         assertThat(response.getBody().getFieldErrors())
                 .containsEntry("id", "Account ID must be a positive number");
     }

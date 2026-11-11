@@ -1,5 +1,7 @@
 package org.example.enterprisedigitalbankingsystem.auth.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.Valid;
 import org.example.enterprisedigitalbankingsystem.auth.dto.request.LoginRequest;
 import org.example.enterprisedigitalbankingsystem.auth.dto.request.RegisterRequest;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 
+@Tag(name = "Authentication", description = "User registration, login, and JWT token issuance")
 @RestController
 @RequestMapping("/auth")
 public class AuthController {

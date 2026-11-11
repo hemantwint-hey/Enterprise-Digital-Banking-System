@@ -5,6 +5,8 @@ import lombok.*;
 import org.example.enterprisedigitalbankingsystem.loan.entity.LoanStatus;
 import org.example.enterprisedigitalbankingsystem.loan.entity.LoanType;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -13,7 +15,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class LoanResponse {
+public class LoanResponse implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
     private Long id;
     private Long  customerId;
     private String disbursementAccountNumber;

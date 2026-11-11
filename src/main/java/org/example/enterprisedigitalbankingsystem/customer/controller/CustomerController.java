@@ -1,5 +1,15 @@
 package org.example.enterprisedigitalbankingsystem.customer.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.customer.dto.request.CustomerSearchRequest;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.ModelAttribute;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -19,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Validated
+@Tag(name = "Customers", description = "Customer onboarding, KYC verification, and dynamic search APIs")
 @RestController
 @RequestMapping("/api/v1/customers")
 @RequiredArgsConstructor
@@ -47,9 +58,18 @@ public class CustomerController {
     }
 
     @GetMapping
-    public ResponseEntity<List<CustomerSummaryResponse>> getAllCustomers() {
-        List<CustomerSummaryResponse> response = customerService.getAllCustomers();
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Get paginated list of customers")
+    public ResponseEntity<PagedResponse<CustomerSummaryResponse>> getAllCustomers(
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(customerService.getAllCustomers(pageable));
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search customers dynamically by multiple filter criteria")
+    public ResponseEntity<PagedResponse<CustomerSummaryResponse>> searchCustomers(
+            @ParameterObject @Valid @ModelAttribute CustomerSearchRequest filter,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(customerService.searchCustomers(filter, pageable));
     }
 
     @PutMapping("/{customerId}")

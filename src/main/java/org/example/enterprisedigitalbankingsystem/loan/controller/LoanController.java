@@ -1,5 +1,13 @@
 package org.example.enterprisedigitalbankingsystem.loan.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @Validated
+@Tag(name = "Loans", description = "Loan application, approval, rejection, and customer loan APIs")
 @RestController
 @RequestMapping("/api/v1/loans")
 @RequiredArgsConstructor
@@ -32,9 +41,11 @@ public class LoanController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<List<LoanResponse>> getLoansByCustomerId(
-            @PathVariable @Positive(message = "Customer id must be positive") Long customerId){
-        return ResponseEntity.ok(loanService.getLoansByCustomerId(customerId));
+    @Operation(summary = "Get paginated loans for a customer")
+    public ResponseEntity<PagedResponse<LoanResponse>> getLoansByCustomerId(
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable){
+        return ResponseEntity.ok(loanService.getLoansByCustomerId(customerId, pageable));
     }
 
     @PatchMapping("/{loanId}/approve")

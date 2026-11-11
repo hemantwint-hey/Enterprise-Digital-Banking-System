@@ -1,5 +1,12 @@
 package org.example.enterprisedigitalbankingsystem.beneficiary.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
@@ -75,16 +82,22 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
         return beneficiaryMapper.toResponse(findBeneficiaryById(beneficiaryId));
     }
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "nickName", "status", "createdAt"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<BeneficiaryResponse> getBeneficiariesByCustomerId(Long customerId) {
+    public PagedResponse<BeneficiaryResponse> getBeneficiariesByCustomerId(Long customerId, Pageable pageable) {
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
 
-        return beneficiaryRepository.findByCustomerId(customerId).stream()
-                .map(beneficiaryMapper::toResponse)
-                .toList();
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<BeneficiaryResponse> page = beneficiaryRepository.findByCustomerId(customerId, validatedPageable)
+                .map(beneficiaryMapper::toResponse);
+        return PagedResponse.from(page);
     }
 
     @Override

@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.audit.entity.AuditAction;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -13,7 +15,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class AuditLogResponse {
+public class AuditLogResponse implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
     private Long id;
     private UUID performedByUserId;
     private String performedByUsername;

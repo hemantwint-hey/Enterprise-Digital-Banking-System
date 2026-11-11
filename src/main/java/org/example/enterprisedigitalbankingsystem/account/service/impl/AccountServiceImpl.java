@@ -1,5 +1,15 @@
 package org.example.enterprisedigitalbankingsystem.account.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.account.dto.request.AccountSearchRequest;
+import org.example.enterprisedigitalbankingsystem.account.specification.AccountSpecification;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.dto.request.CloseAccountRequest;
 import org.example.enterprisedigitalbankingsystem.account.dto.request.CreateAccountRequest;
@@ -40,6 +50,7 @@ public class AccountServiceImpl implements AccountService {
     private final AuditService auditService;
 
     @Override
+    @CacheEvict(value = "accountsByCustomer", allEntries = true)
     public AccountResponse createAccount(CreateAccountRequest request) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
@@ -80,18 +91,36 @@ public class AccountServiceImpl implements AccountService {
         return accountMapper.toResponse(account);
     }
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "accountNumber", "balance", "accountType", "accountStatus", "branch", "createdAt"
+    );
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Direction.DESC, "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "accountsByCustomer", key = "#customerId")
-    public List<AccountSummaryResponse> getAccountsByCustomerId(Long customerId) {
+    @Cacheable(
+            value = "accountsByCustomer",
+            key = "#customerId + ':' + (#pageable != null ? #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString() : 'default')"
+    )
+    public PagedResponse<AccountSummaryResponse> getAccountsByCustomerId(Long customerId, Pageable pageable) {
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
 
-        return accountRepository.findByCustomerId(customerId)
-                .stream()
-                .map(accountMapper::toSummaryResponse)
-                .toList();
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AccountSummaryResponse> page = accountRepository.findByCustomerId(customerId, validatedPageable)
+                .map(accountMapper::toSummaryResponse);
+        return PagedResponse.from(page);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<AccountSummaryResponse> searchAccounts(AccountSearchRequest filter, Pageable pageable) {
+        Pageable validatedPageable = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+        Page<AccountSummaryResponse> page = accountRepository
+                .findAll(AccountSpecification.withFilters(filter), validatedPageable)
+                .map(accountMapper::toSummaryResponse);
+        return PagedResponse.from(page);
     }
 
     @Override

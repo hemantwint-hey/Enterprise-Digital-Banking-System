@@ -2,11 +2,12 @@ package org.example.enterprisedigitalbankingsystem.customer.repository;
 
 import org.example.enterprisedigitalbankingsystem.customer.entity.Customer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Optional;
 import java.util.UUID;
 
-public interface CustomerRepository extends JpaRepository<Customer, Long> {
+public interface CustomerRepository extends JpaRepository<Customer, Long>, JpaSpecificationExecutor<Customer> {
     Optional<Customer> findByUserUserId(UUID userId);
     Optional<Customer> findByPanNumber(String panNumber);
     Optional<Customer> findByAadhaarNumber(String aadhaarNumber);

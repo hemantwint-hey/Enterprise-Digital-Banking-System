@@ -1,5 +1,11 @@
 package org.example.enterprisedigitalbankingsystem.beneficiary.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
@@ -194,26 +200,33 @@ class BeneficiaryServiceImplTest {
     }
 
     @Test
-    void getBeneficiariesByCustomerId_whenCustomerExists_returnsMappedList() {
+    void getBeneficiariesByCustomerId_whenCustomerExists_returnsPagedResponse() {
         Beneficiary beneficiary = buildBeneficiary(10L, BeneficiaryStatus.ACTIVE, "Bob Savings");
+        Pageable pageable = PageRequest.of(0, 20);
         when(customerRepository.existsById(1L)).thenReturn(true);
-        when(beneficiaryRepository.findByCustomerId(1L)).thenReturn(List.of(beneficiary));
+        when(beneficiaryRepository.findByCustomerId(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(beneficiary)));
 
-        List<BeneficiaryResponse> responses = beneficiaryService.getBeneficiariesByCustomerId(1L);
+        PagedResponse<BeneficiaryResponse> responses =
+                beneficiaryService.getBeneficiariesByCustomerId(1L, pageable);
 
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getId()).isEqualTo(10L);
+        assertThat(responses.getContent()).hasSize(1);
+        assertThat(responses.getContent().get(0).getId()).isEqualTo(10L);
     }
 
     @Test
     void getBeneficiariesByCustomerId_whenCustomerMissing_throwsResourceNotFoundException() {
         when(customerRepository.existsById(99L)).thenReturn(false);
 
-        assertThatThrownBy(() -> beneficiaryService.getBeneficiariesByCustomerId(99L))
+        assertThatThrownBy(() -> beneficiaryService.getBeneficiariesByCustomerId(99L, PageRequest.of(0, 20)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("99");
 
-        verify(beneficiaryRepository, never()).findByCustomerId(any());
+        verify(beneficiaryRepository, never()).findByCustomerId(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(Pageable.class));
     }
 
     @Test

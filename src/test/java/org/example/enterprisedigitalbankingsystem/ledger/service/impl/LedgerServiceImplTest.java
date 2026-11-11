@@ -1,5 +1,11 @@
 package org.example.enterprisedigitalbankingsystem.ledger.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountStatus;
 import org.example.enterprisedigitalbankingsystem.account.entity.AccountType;
@@ -165,14 +171,18 @@ class LedgerServiceImplTest {
                 .narration("Deposit")
                 .build();
 
-        when(ledgerRepository.findByAccountIdOrderByCreatedAtDesc(2L)).thenReturn(List.of(entry));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(ledgerRepository.findByAccountId(
+                org.mockito.ArgumentMatchers.eq(2L),
+                org.mockito.ArgumentMatchers.any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entry)));
 
-        List<LedgerEntryResponse> responses = ledgerService.getLedgerByAccount(2L);
+        PagedResponse<LedgerEntryResponse> responses = ledgerService.getLedgerByAccount(2L, pageable);
 
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getAccountId()).isEqualTo(2L);
-        assertThat(responses.get(0).getEntryType()).isEqualTo(EntryType.CREDIT);
-        assertThat(responses.get(0).getAmount()).isEqualByComparingTo("50.00");
+        assertThat(responses.getContent()).hasSize(1);
+        assertThat(responses.getContent().get(0).getAccountId()).isEqualTo(2L);
+        assertThat(responses.getContent().get(0).getEntryType()).isEqualTo(EntryType.CREDIT);
+        assertThat(responses.getContent().get(0).getAmount()).isEqualByComparingTo("50.00");
     }
 
     @Test

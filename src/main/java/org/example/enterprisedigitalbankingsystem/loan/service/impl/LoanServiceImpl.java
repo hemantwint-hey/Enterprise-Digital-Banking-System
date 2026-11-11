@@ -1,5 +1,12 @@
 package org.example.enterprisedigitalbankingsystem.loan.service.impl;
 
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.example.enterprisedigitalbankingsystem.common.util.SortValidator;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import java.util.Set;
+
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.account.entity.Account;
 import org.example.enterprisedigitalbankingsystem.account.repository.AccountRepository;
@@ -75,11 +82,16 @@ public class LoanServiceImpl implements LoanService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LoanResponse> getLoansByCustomerId(Long customerId) {
+    public PagedResponse<LoanResponse> getLoansByCustomerId(Long customerId, Pageable pageable) {
         if(!customerRepository.existsById(customerId)){
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
-        return loanRepository.findByCustomerId(customerId).stream().map(loanMapper::toResponse).toList();
+        Pageable validatedPageable = SortValidator.validate(pageable, Set.of(
+                "id", "principalAmount", "interestRate", "tenureMonths", "status", "createdAt"
+        ), Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<LoanResponse> page = loanRepository.findByCustomerId(customerId, validatedPageable)
+                .map(loanMapper::toResponse);
+        return PagedResponse.from(page);
     }
 
     @Override

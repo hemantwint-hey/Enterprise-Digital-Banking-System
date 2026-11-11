@@ -68,13 +68,17 @@
     - Authored Flyway migration `V2__add_indexes_and_constraints.sql` adding 9 composite/B-Tree indexes and 7 financial CHECK constraints.
     - Synchronized JPA entity `@Table(indexes = { ... })` across all core models.
     - Created `DatabaseOptimizationMigrationTest` verifying migration DDL integrity (66 total project tests passing).
+15. **Day 76: Validation (Bean Validation)**:
+    - Created custom `@MinimumAge` / `MinimumAgeValidator` KYC age check (`common/validation/`).
+    - Upgraded `ErrorResponse` (`fieldErrors` + `@JsonInclude(NON_NULL)`) and `GlobalExceptionHandler` (`MethodArgumentNotValidException`, `HandlerMethodValidationException`, `ConstraintViolationException`, `HttpMessageNotReadableException`, `MethodArgumentTypeMismatchException`).
+    - Hardened JSR-380 bounds and `@JsonIgnore @AssertTrue` rules across all 15 active request DTOs and `@Validated` path parameters across all 8 active REST controllers.
+    - Added `BeanValidationRulesTest` (6 tests) and `GlobalExceptionHandlerValidationTest` (5 tests).
 
 ### What We Need to Do Next:
 - **Paused / Deferred Until After Day 79 — Days 71–75 (Automated Testing)**:
   - Mockito service tests, `@DataJpaTest` repository tests, `@WebMvcTest` controller tests, and `@SpringBootTest` integration suite (`docs/roadmap-refs/05-testing.pdf`) — deferred per user request to complete Days 76–79 first.
-- **Immediate Focus — Days 76–79 (API Hardening & Query Layer, Notes & Planned Code PDFs Prepared)**:
-  - **Day 76**: Bean Validation (`@Valid` / `@Validated`, nested `@Pattern` / `@Positive` / `@DecimalMin` constraints, enhanced `GlobalExceptionHandler` with `HandlerMethodValidationException` & `ConstraintViolationException`).
-  - **Day 77**: Pagination (`PagedResponse<T>`, `@PageableDefault` & `spring.data.web` configuration, Pageable migration across controllers/services/repositories).
+- **Immediate Focus — Days 77–79 (API Hardening & Query Layer, Notes & Planned Code PDFs Prepared)**:
+  - **Day 77 (User Implementing — Skeleton `common/dto/PagedResponse.java` created)**: Pagination (`PagedResponse<T>`, `@PageableDefault` & `spring.data.web` configuration, Pageable migration across controllers/services/repositories).
   - **Day 78**: Sorting (`SortValidator` strict allowlist against `PropertyReferenceException` / column enumeration, multi-column tie-breakers, removal of hardcoded `OrderBy...` method suffixes).
   - **Day 79**: Dynamic Search (`JpaSpecificationExecutor` + `Specification.unrestricted()` Specifications for Transactions, Accounts, Customers, and Audit Logs).
 - **Architectural Initiative: Privacy-Preserving AI Gateway & Spring AI Service**:

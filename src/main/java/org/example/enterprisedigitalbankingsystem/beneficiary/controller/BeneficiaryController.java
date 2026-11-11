@@ -1,5 +1,13 @@
 package org.example.enterprisedigitalbankingsystem.beneficiary.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.enterprisedigitalbankingsystem.common.dto.PagedResponse;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @Validated
+@Tag(name = "Beneficiaries", description = "Beneficiary management and activation APIs")
 @RestController
 @RequestMapping("/api/v1/beneficiaries")
 @RequiredArgsConstructor
@@ -36,10 +45,11 @@ public class BeneficiaryController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<List<BeneficiaryResponse>> getBeneficiariesByCustomerId(
-            @PathVariable @Positive(message = "Customer id must be positive") Long customerId) {
-        List<BeneficiaryResponse> response = beneficiaryService.getBeneficiariesByCustomerId(customerId);
-        return ResponseEntity.ok(response);
+    @Operation(summary = "Get paginated beneficiaries for a customer")
+    public ResponseEntity<PagedResponse<BeneficiaryResponse>> getBeneficiariesByCustomerId(
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId,
+            @ParameterObject @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(beneficiaryService.getBeneficiariesByCustomerId(customerId, pageable));
     }
 
     @PutMapping("/{beneficiaryId}")

@@ -3,6 +3,8 @@ package org.example.enterprisedigitalbankingsystem.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -90,6 +92,28 @@ public class GlobalExceptionHandler {
 
         String message = "Invalid value for parameter '" + ex.getName() + "'";
         return buildResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    // Invalid Sort Property Passed to Spring Data Sort (400)
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSortProperty(
+            PropertyReferenceException ex,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid sort property: " + ex.getPropertyName(), request);
+    }
+
+    // Concurrent Optimistic Locking Conflict (@Version mismatch) (409)
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException ex,
+            HttpServletRequest request) {
+
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Concurrent modification detected on resource. Please retry your request.",
+                request
+        );
     }
 
     // User Already Exists (409)
