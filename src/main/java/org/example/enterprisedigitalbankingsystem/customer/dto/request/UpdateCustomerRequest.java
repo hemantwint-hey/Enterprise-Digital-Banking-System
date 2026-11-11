@@ -2,12 +2,14 @@ package org.example.enterprisedigitalbankingsystem.customer.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.example.enterprisedigitalbankingsystem.common.validation.MinimumAge;
 
 import java.time.LocalDate;
 
@@ -26,6 +28,8 @@ public class UpdateCustomerRequest {
     private String lastName;
 
     @NotNull(message = "Date of birth is required")
+    @Past(message = "Date of birth must be in the past")
+    @MinimumAge(value = 18, message = "Customer must be at least 18 years old for banking KYC")
     private LocalDate dateOfBirth;
 
     @NotBlank(message = "Phone number is required")

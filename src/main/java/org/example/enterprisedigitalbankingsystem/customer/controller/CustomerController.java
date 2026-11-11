@@ -1,6 +1,8 @@
 package org.example.enterprisedigitalbankingsystem.customer.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.example.enterprisedigitalbankingsystem.customer.dto.request.CompleteKYCRequest;
 import org.example.enterprisedigitalbankingsystem.customer.dto.request.CreateCustomerRequest;
@@ -10,11 +12,13 @@ import org.example.enterprisedigitalbankingsystem.customer.dto.response.Customer
 import org.example.enterprisedigitalbankingsystem.customer.service.CustomerService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/api/v1/customers")
 @RequiredArgsConstructor
@@ -29,13 +33,15 @@ public class CustomerController {
     }
 
     @GetMapping("/{customerId}")
-    public ResponseEntity<CustomerResponse> getCustomerById(@PathVariable Long customerId) {
+    public ResponseEntity<CustomerResponse> getCustomerById(
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId) {
         CustomerResponse response = customerService.getCustomerById(customerId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<CustomerResponse> getCustomerByUserId(@PathVariable UUID userId) {
+    public ResponseEntity<CustomerResponse> getCustomerByUserId(
+            @PathVariable @NotNull(message = "User id is required") UUID userId) {
         CustomerResponse response = customerService.getCustomerByUserId(userId);
         return ResponseEntity.ok(response);
     }
@@ -48,7 +54,7 @@ public class CustomerController {
 
     @PutMapping("/{customerId}")
     public ResponseEntity<CustomerResponse> updateCustomer(
-            @PathVariable Long customerId,
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId,
             @Valid @RequestBody UpdateCustomerRequest request
     ) {
         CustomerResponse response = customerService.updateCustomer(customerId, request);
@@ -57,7 +63,7 @@ public class CustomerController {
 
     @PatchMapping("/{customerId}/kyc")
     public ResponseEntity<CustomerResponse> completeKYC(
-            @PathVariable Long customerId,
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId,
             @Valid @RequestBody CompleteKYCRequest request
     ) {
         CustomerResponse response = customerService.completeKYC(customerId, request);
@@ -65,7 +71,8 @@ public class CustomerController {
     }
 
     @DeleteMapping("/{customerId}")
-    public ResponseEntity<Void> deleteCustomer(@PathVariable Long customerId) {
+    public ResponseEntity<Void> deleteCustomer(
+            @PathVariable @Positive(message = "Customer id must be positive") Long customerId) {
         customerService.deleteCustomer(customerId);
         return ResponseEntity.noContent().build();
     }

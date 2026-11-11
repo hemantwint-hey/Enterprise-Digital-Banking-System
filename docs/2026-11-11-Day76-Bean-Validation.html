@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day 76: Bean Validation &amp; Input Hardening - Study Notes &amp; Implementation Plan</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm 15mm 12mm;
+  }
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #cbd5e1;
+    --soft: #f8fafc;
+    --brand: #0f2b46;
+    --brand-light: #1e3a8a;
+    --accent: #0284c7;
+    --ok: #15803d;
+    --ok-bg: #dcfce7;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --bad: #b91c1c;
+    --bad-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    font-size: 9.5pt;
+    line-height: 1.48;
+    margin: 0;
+    background: #fff;
+  }
+  .header-card {
+    background: linear-gradient(135deg, #091c33 0%, #1e3a8a 100%);
+    color: #fff;
+    padding: 13mm 11mm;
+    border-radius: 6px;
+    margin-bottom: 5mm;
+  }
+  .badge-row { margin-bottom: 3mm; }
+  .badge {
+    display: inline-block;
+    padding: 0.8mm 2.2mm;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 1.5mm;
+  }
+  .badge-day { background: #38bdf8; color: #082f49; }
+  .badge-topic { background: rgba(255, 255, 255, 0.2); color: #fff; }
+  .badge-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #86efac; }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde047; }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); border: 1px solid #fca5a5; }
+  .header-card h1 { font-size: 21pt; margin: 0 0 2mm; font-weight: 700; line-height: 1.2; }
+  .header-card p.subtitle { font-size: 10.5pt; margin: 0 0 4mm; opacity: 0.92; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    padding-top: 3mm;
+    font-size: 8.4pt;
+  }
+  .header-card .meta-grid div span {
+    display: block;
+    opacity: 0.72;
+    font-size: 7.2pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  h2 {
+    font-size: 13.5pt;
+    color: var(--brand);
+    border-bottom: 2px solid var(--brand);
+    padding-bottom: 1.2mm;
+    margin: 6mm 0 2.5mm;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 10.8pt; color: var(--brand-light); margin: 4mm 0 1.5mm; page-break-after: avoid; }
+  h4 { font-size: 9.6pt; color: #334155; margin: 2.5mm 0 1mm; page-break-after: avoid; }
+  p { margin: 1mm 0 2.3mm; }
+  ul, ol { margin: 1mm 0 2.8mm; padding-left: 5mm; }
+  li { margin-bottom: 0.8mm; }
+  code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 8.3pt;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0.2mm 1mm;
+    border-radius: 3px;
+  }
+  .file-header {
+    background: #1e293b;
+    color: #cbd5e1;
+    padding: 1.5mm 3mm;
+    font-size: 7.8pt;
+    font-family: "Cascadia Code", Consolas, monospace;
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid #334155;
+    margin-top: 2.5mm;
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm 4mm;
+    flex-wrap: wrap;
+    page-break-after: avoid;
+  }
+  .file-header + pre.code { margin-top: 0; border-radius: 0 0 4px 4px; }
+  pre.code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 7.9pt;
+    line-height: 1.38;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 2.8mm 3.6mm;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 2mm 0 3.5mm;
+    border-left: 3.5px solid var(--accent);
+  }
+  pre.code .c { color: #94a3b8; font-style: italic; }
+  pre.code .k { color: #38bdf8; font-weight: bold; }
+  pre.code .s { color: #4ade80; }
+  pre.code .a { color: #facc15; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 3.5mm;
+    font-size: 8.4pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #1e293b;
+    color: #fff;
+    text-align: left;
+    padding: 1.8mm 2.3mm;
+    font-weight: 600;
+  }
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 1.6mm 2.3mm;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .note {
+    border-left: 3.5px solid var(--accent);
+    background: #f0f9ff;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .warn {
+    border-left: 3.5px solid var(--warn);
+    background: #fffbeb;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .tip {
+    border-left: 3.5px solid var(--ok);
+    background: #f0fdf4;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3mm;
+    margin: 2mm 0 3.5mm;
+    page-break-inside: avoid;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2.3mm 3mm;
+    background: #fff;
+  }
+  .card h4 { margin-top: 0; color: var(--brand); }
+  .diagram-box {
+    background: #0f172a;
+    color: #38bdf8;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 7.8pt;
+    padding: 2.8mm 3.5mm;
+    border-radius: 4px;
+    margin: 2mm 0 3.5mm;
+    line-height: 1.38;
+    white-space: pre;
+    page-break-inside: avoid;
+  }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+  <div class="header-card">
+    <div class="badge-row">
+      <span class="badge badge-day">DAY 76</span>
+      <span class="badge badge-topic">BEAN VALIDATION</span>
+      <span class="badge badge-topic">JAKARTA VALIDATION 3.1</span>
+      <span class="badge badge-topic">SPRING BOOT 4.1</span>
+    </div>
+    <h1>Bean Validation &amp; API Input Hardening</h1>
+    <p class="subtitle">Study Notes &amp; Planned Implementation Blueprint: Declarative DTO &amp; Parameter Validation, Custom Banking Constraints, Cross-Field Rules, Monetary Precision Guards, and Structured Global Error Handling.</p>
+    <div class="meta-grid">
+      <div><span>Project</span><strong>Enterprise Digital Banking</strong></div>
+      <div><span>Engine</span><strong>Hibernate Validator 9.1</strong></div>
+      <div><span>Spring Stack</span><strong>Boot 4.1.0 / Web 7.0.8</strong></div>
+      <div><span>Target Layer</span><strong>DTO + Controller + Advice</strong></div>
+    </div>
+  </div>
+
+  <h2>1. Core Concepts: How Bean Validation Works in Spring Boot 4</h2>
+  <p>In an enterprise banking API, every byte crossing the HTTP boundary is untrusted input. Relying only on database <code>CHECK</code> constraints (Day 70) or manual <code>if/else</code> checks in service methods wastes database connections, thread-pool slots, and Kafka I/O when malformed inputs can be rejected in microseconds at the Web/Controller boundary.</p>
+
+  <div class="diagram-box">HTTP Request (JSON / Path / Query)
+   │
+   ├─► Jackson 3 Deserializer ──(bad JSON / invalid Enum?)──► HttpMessageNotReadableException ──► 400 Bad Request
+   │
+   ├─► @Valid on @RequestBody ──(field/class rule fails?)──► MethodArgumentNotValidException ─► 400 + fieldErrors Map
+   │
+   ├─► @Validated on @RestController (@PathVariable / @RequestParam)
+   │       └─(Spring 7 MethodValidation)───────────────────► HandlerMethodValidationException ─► 400 Bad Request
+   │
+   └─► Validated DTO enters @Service ──► Clean Business Logic + ACID Ledger</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4><code>@Valid</code> (Jakarta Standard)</h4>
+      <ul>
+        <li>Triggers validation on <code>@RequestBody</code> and <code>@ModelAttribute</code> objects.</li>
+        <li>Cascades validation recursively into nested objects/lists when placed on fields.</li>
+        <li>Throws <code>MethodArgumentNotValidException</code> in Spring MVC.</li>
+        <li>Does <strong>NOT</strong> support validation groups or method-level primitives on its own.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4><code>@Validated</code> (Spring Framework)</h4>
+      <ul>
+        <li>Placed on the <code>@RestController</code> class to enable proxy/method validation for <code>@PathVariable</code> and <code>@RequestParam</code> (e.g., <code>@Positive Long accountId</code>).</li>
+        <li>Supports <strong>Validation Groups</strong> (e.g., <code>OnCreate.class</code> vs <code>OnUpdate.class</code>).</li>
+        <li>In Spring Framework 6.1+ / 7.0 (Boot 4.1), triggers <code>HandlerMethodValidationException</code> natively inside <code>RequestMappingHandlerAdapter</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Essential Constraint Distinctions (Interview Favorite)</h3>
+  <table>
+    <tr>
+      <th style="width: 22%;">Annotation</th>
+      <th style="width: 14%;">Rejects <code>null</code>?</th>
+      <th style="width: 14%;">Rejects <code>""</code>?</th>
+      <th style="width: 16%;">Rejects <code>"   "</code>?</th>
+      <th style="width: 34%;">Banking Usage Rule</th>
+    </tr>
+    <tr>
+      <td><code>@NotNull</code></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td><span class="badge badge-bad">NO</span></td>
+      <td><span class="badge badge-bad">NO</span></td>
+      <td>Enums (<code>AccountType</code>), IDs (<code>Long</code>), <code>BigDecimal</code>, <code>LocalDate</code>.</td>
+    </tr>
+    <tr>
+      <td><code>@NotEmpty</code></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td><span class="badge badge-bad">NO</span></td>
+      <td>Non-empty collections / arrays (<code>List&lt;Long&gt;</code>).</td>
+    </tr>
+    <tr>
+      <td><code>@NotBlank</code></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td><span class="badge badge-ok">YES</span></td>
+      <td>Strings: <code>branch</code>, <code>email</code>, <code>reason</code>, <code>panNumber</code>.</td>
+    </tr>
+    <tr>
+      <td><code>@Digits(integer=16, fraction=2)</code></td>
+      <td>No (pair w/ <code>@NotNull</code>)</td>
+      <td>N/A</td>
+      <td>N/A</td>
+      <td>Matches MySQL <code>DECIMAL(18,2)</code>; stops sub-paise inputs like <code>100.1234</code>!</td>
+    </tr>
+  </table>
+
+  <h2>2. Real Codebase Gap Audit (What Exists vs. What Day 76 Fixes)</h2>
+  <p>Before writing code, we audited every controller, request DTO, and <code>GlobalExceptionHandler</code> already in <code>org.example.enterprisedigitalbankingsystem</code>:</p>
+  <table>
+    <tr>
+      <th style="width: 28%;">Component Audited</th>
+      <th style="width: 34%;">Current State in Codebase</th>
+      <th style="width: 38%;">Planned Day 76 Upgrade</th>
+    </tr>
+    <tr>
+      <td><strong>GlobalExceptionHandler</strong></td>
+      <td>Handles <code>MethodArgumentNotValidException</code> as a flat string; missing handlers for method-param errors and invalid JSON/enums (currently leaks <strong>500 Error</strong>!).</td>
+      <td>Handle <code>HandlerMethodValidationException</code>, <code>ConstraintViolationException</code>, and <code>HttpMessageNotReadableException</code> cleanly as <code>400</code>; add structured <code>fieldErrors</code> map to <code>ErrorResponse</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Controllers (Path/Query)</strong></td>
+      <td>Use <code>@Valid @RequestBody</code>, but <strong>none</strong> validate <code>@PathVariable</code> IDs (<code>-1</code> or <code>0</code> hits DB unnecessarily).</td>
+      <td>Add <code>@Validated</code> + <code>@Positive</code> / <code>@NotBlank</code> on all controller path/query parameters.</td>
+    </tr>
+    <tr>
+      <td><strong>Money Fields (BigDecimal)</strong></td>
+      <td><code>DepositRequest</code>, <code>WithdrawRequest</code>, <code>TransferRequest</code>, <code>CreateAccountRequest</code>, <code>CreateLoanRequest</code> check <code>@DecimalMin</code> only.</td>
+      <td>Enforce <code>@Digits(integer = 16, fraction = 2)</code> and <code>@DecimalMax</code> (e.g., <code>100000000.00</code>) aligned with MySQL <code>DECIMAL(18,2)</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Customer DOB</strong></td>
+      <td><code>CreateCustomerRequest</code> / <code>UpdateCustomerRequest</code> only have <code>@NotNull</code> on <code>dateOfBirth</code> (allows future year 2099!).</td>
+      <td>Add <code>@Past</code> + custom <code>@MinimumAge(18)</code> banking KYC rule validator.</td>
+    </tr>
+    <tr>
+      <td><strong>TransferRequest (XOR Rule)</strong></td>
+      <td><code>destinationAccountId</code> vs <code>beneficiaryId</code> exclusivity and self-transfer checks live inside service code only.</td>
+      <td>Create class-level <code>@ValidTransferTarget</code> constraint so invalid requests fail at Controller level immediately.</td>
+    </tr>
+    <tr>
+      <td><strong>Password Confirmation</strong></td>
+      <td><code>RegisterRequest</code>, <code>ResetPasswordRequest</code>, <code>ChangePassowordRequest</code> check password match manually in service; typos in validation messages.</td>
+      <td>Create <code>@PasswordMatches</code> class-level validator + complete messages &amp; strong constraints across all auth DTOs.</td>
+    </tr>
+  </table>
+
+  <div class="page-break"></div>
+  <h2>3. Planned Code: Structured Error Handling &amp; Hardened GlobalExceptionHandler</h2>
+  <p>We keep <code>ErrorResponse</code> 100% backward-compatible (keeping its 4-argument constructor) while adding optional <code>fieldErrors</code> populated during validation failures and suppressed via <code>@JsonInclude(NON_NULL)</code> on non-validation errors.</p>
+
+  <div class="file-header">
+    <span>src/main/java/org/example/enterprisedigitalbankingsystem/exception/ErrorResponse.java</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.exception;
+
+<span class="k">import</span> com.fasterxml.jackson.annotation.JsonInclude;
+<span class="k">import</span> java.time.LocalDateTime;
+<span class="k">import</span> java.util.Map;
+
+<span class="a">@JsonInclude</span>(JsonInclude.Include.NON_NULL)
+<span class="k">public class</span> ErrorResponse {
+
+    <span class="k">private</span> LocalDateTime timestamp;
+    <span class="k">private int</span> status;
+    <span class="k">private</span> String error;
+    <span class="k">private</span> String path;
+    <span class="k">private</span> Map&lt;String, String&gt; fieldErrors;
+
+    <span class="k">public</span> ErrorResponse() {}
+
+    <span class="c">// Preserved 4-arg constructor for 100% compatibility with existing handlers &amp; tests</span>
+    <span class="k">public</span> ErrorResponse(LocalDateTime timestamp, <span class="k">int</span> status, String error, String path) {
+        <span class="k">this</span>(timestamp, status, error, path, <span class="k">null</span>);
+    }
+
+    <span class="k">public</span> ErrorResponse(LocalDateTime timestamp, <span class="k">int</span> status, String error,
+                         String path, Map&lt;String, String&gt; fieldErrors) {
+        <span class="k">this</span>.timestamp = timestamp;
+        <span class="k">this</span>.status = status;
+        <span class="k">this</span>.error = error;
+        <span class="k">this</span>.path = path;
+        <span class="k">this</span>.fieldErrors = fieldErrors;
+    }
+
+    <span class="c">// Standard getters and setters for all 5 fields...</span>
+}</pre>
+
+  <div class="file-header">
+    <span>src/main/java/org/example/enterprisedigitalbankingsystem/exception/GlobalExceptionHandler.java</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="k">import</span> jakarta.validation.ConstraintViolationException;
+<span class="k">import</span> org.springframework.http.converter.HttpMessageNotReadableException;
+<span class="k">import</span> org.springframework.web.method.annotation.HandlerMethodValidationException;
+<span class="k">import</span> java.util.LinkedHashMap;
+<span class="k">import</span> java.util.Map;
+
+<span class="c">// 1. @RequestBody DTO field &amp; class-level constraint violations (400)</span>
+<span class="a">@ExceptionHandler</span>(MethodArgumentNotValidException.class)
+<span class="k">public</span> ResponseEntity&lt;ErrorResponse&gt; handleValidationException(
+        MethodArgumentNotValidException ex, HttpServletRequest request) {
+
+    Map&lt;String, String&gt; fieldErrors = <span class="k">new</span> LinkedHashMap&lt;&gt;();
+    ex.getBindingResult().getFieldErrors().forEach(fe -&gt;
+            fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
+    ex.getBindingResult().getGlobalErrors().forEach(ge -&gt;
+            fieldErrors.putIfAbsent(ge.getObjectName(), ge.getDefaultMessage()));
+
+    String summary = fieldErrors.entrySet().stream()
+            .map(e -&gt; e.getKey() + <span class="s">": "</span> + e.getValue())
+            .collect(Collectors.joining(<span class="s">", "</span>));
+
+    <span class="k">return</span> <span class="k">new</span> ResponseEntity&lt;&gt;(
+            <span class="k">new</span> ErrorResponse(LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(),
+                    summary, request.getRequestURI(), fieldErrors),
+            HttpStatus.BAD_REQUEST);
+}
+
+<span class="c">// 2. Spring Boot 4 / Framework 7 @PathVariable &amp; @RequestParam validation errors (400)</span>
+<span class="a">@ExceptionHandler</span>(HandlerMethodValidationException.class)
+<span class="k">public</span> ResponseEntity&lt;ErrorResponse&gt; handleMethodValidation(
+        HandlerMethodValidationException ex, HttpServletRequest request) {
+
+    Map&lt;String, String&gt; fieldErrors = <span class="k">new</span> LinkedHashMap&lt;&gt;();
+    ex.getParameterValidationResults().forEach(result -&gt; {
+        String param = result.getMethodParameter().getParameterName();
+        result.getResolvableErrors().forEach(err -&gt;
+                fieldErrors.putIfAbsent(param != <span class="k">null</span> ? param : <span class="s">"parameter"</span>, err.getDefaultMessage()));
+    });
+
+    <span class="k">return</span> <span class="k">new</span> ResponseEntity&lt;&gt;(
+            <span class="k">new</span> ErrorResponse(LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(),
+                    <span class="s">"Validation failed for request parameter(s)"</span>, request.getRequestURI(), fieldErrors),
+            HttpStatus.BAD_REQUEST);
+}
+
+<span class="c">// 3. Direct Bean Validation / Service-layer ConstraintViolationException (400)</span>
+<span class="a">@ExceptionHandler</span>(ConstraintViolationException.class)
+<span class="k">public</span> ResponseEntity&lt;ErrorResponse&gt; handleConstraintViolation(
+        ConstraintViolationException ex, HttpServletRequest request) {
+
+    Map&lt;String, String&gt; fieldErrors = <span class="k">new</span> LinkedHashMap&lt;&gt;();
+    ex.getConstraintViolations().forEach(v -&gt;
+            fieldErrors.putIfAbsent(v.getPropertyPath().toString(), v.getMessage()));
+
+    <span class="k">return</span> <span class="k">new</span> ResponseEntity&lt;&gt;(
+            <span class="k">new</span> ErrorResponse(LocalDateTime.now(), HttpStatus.BAD_REQUEST.value(),
+                    <span class="s">"Constraint violation"</span>, request.getRequestURI(), fieldErrors),
+            HttpStatus.BAD_REQUEST);
+}
+
+<span class="c">// 4. Malformed JSON, wrong date format, or invalid Enum constant (e.g. accountType="CRYPTO")</span>
+<span class="a">@ExceptionHandler</span>(HttpMessageNotReadableException.class)
+<span class="k">public</span> ResponseEntity&lt;ErrorResponse&gt; handleUnreadableMessage(
+        HttpMessageNotReadableException ex, HttpServletRequest request) {
+    <span class="k">return</span> buildResponse(HttpStatus.BAD_REQUEST,
+            <span class="s">"Malformed JSON payload or invalid field value/enum format"</span>, request);
+}</pre>
+
+  <div class="warn">
+    <strong>Why <code>HttpMessageNotReadableException</code> matters:</strong> Previously, sending <code>{"accountType": "INVALID"}</code> threw <code>HttpMessageNotReadableException</code>, which fell through to <code>handleGenericException</code> and returned an alarming <strong>500 Internal Server Error</strong>! Catching it returns a clean <strong>400 Bad Request</strong>.
+  </div>
+
+  <h2>4. Planned Code: Custom Banking Constraint Annotations</h2>
+  <p>Custom Jakarta Bean Validation annotations eliminate repetitive validation code across controllers and DTOs while expressing real domain rules declaratively.</p>
+
+  <div class="file-header">
+    <span>src/main/java/.../common/validation/MinimumAge.java &amp; MinimumAgeValidator.java</span>
+    <span>NEW</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.common.validation;
+
+<span class="k">import</span> jakarta.validation.Constraint;
+<span class="k">import</span> jakarta.validation.ConstraintValidator;
+<span class="k">import</span> jakarta.validation.ConstraintValidatorContext;
+<span class="k">import</span> jakarta.validation.Payload;
+<span class="k">import</span> java.lang.annotation.*;
+<span class="k">import</span> java.time.LocalDate;
+<span class="k">import</span> java.time.Period;
+
+<span class="a">@Target</span>({ElementType.FIELD, ElementType.PARAMETER})
+<span class="a">@Retention</span>(RetentionPolicy.RUNTIME)
+<span class="a">@Documented</span>
+<span class="a">@Constraint</span>(validatedBy = MinimumAgeValidator.class)
+<span class="k">public @interface</span> MinimumAge {
+    <span class="k">int</span> value() <span class="k">default</span> 18;
+    String message() <span class="k">default</span> <span class="s">"Customer must be at least {value} years old"</span>;
+    Class&lt;?&gt;[] groups() <span class="k">default</span> {};
+    Class&lt;? <span class="k">extends</span> Payload&gt;[] payload() <span class="k">default</span> {};
+}
+
+<span class="k">public class</span> MinimumAgeValidator <span class="k">implements</span> ConstraintValidator&lt;MinimumAge, LocalDate&gt; {
+    <span class="k">private int</span> minimumAge;
+
+    <span class="a">@Override</span>
+    <span class="k">public void</span> initialize(MinimumAge constraintAnnotation) {
+        <span class="k">this</span>.minimumAge = constraintAnnotation.value();
+    }
+
+    <span class="a">@Override</span>
+    <span class="k">public boolean</span> isValid(LocalDate dob, ConstraintValidatorContext context) {
+        <span class="k">if</span> (dob == <span class="k">null</span>) <span class="k">return true</span>; <span class="c">// @NotNull handles nullability independently</span>
+        <span class="k">return</span> Period.between(dob, LocalDate.now()).getYears() &gt;= minimumAge;
+    }
+}</pre>
+
+  <div class="file-header">
+    <span>src/main/java/.../transaction/dto/request/TransferRequest.java (Cross-Field Bean Validation)</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.transaction.dto.request;
+
+<span class="k">import</span> jakarta.validation.constraints.*;
+<span class="k">import</span> lombok.*;
+<span class="k">import</span> java.math.BigDecimal;
+
+<span class="a">@Data</span> <span class="a">@NoArgsConstructor</span> <span class="a">@AllArgsConstructor</span> <span class="a">@Builder</span>
+<span class="k">public class</span> TransferRequest {
+
+    <span class="a">@NotNull</span>(message = <span class="s">"Source account id is required"</span>)
+    <span class="a">@Positive</span>(message = <span class="s">"Source account id must be positive"</span>)
+    <span class="k">private</span> Long sourceAccountId;
+
+    <span class="a">@Positive</span>(message = <span class="s">"Destination account id must be positive"</span>)
+    <span class="k">private</span> Long destinationAccountId;
+
+    <span class="a">@Positive</span>(message = <span class="s">"Beneficiary id must be positive"</span>)
+    <span class="k">private</span> Long beneficiaryId;
+
+    <span class="a">@NotNull</span>(message = <span class="s">"Amount is required"</span>)
+    <span class="a">@DecimalMin</span>(value = <span class="s">"1.00"</span>, message = <span class="s">"Amount must be at least 1.00"</span>)
+    <span class="a">@DecimalMax</span>(value = <span class="s">"10000000.00"</span>, message = <span class="s">"Single transfer limit is 10,000,000.00"</span>)
+    <span class="a">@Digits</span>(integer = 16, fraction = 2, message = <span class="s">"Amount can have at most 2 decimal places"</span>)
+    <span class="k">private</span> BigDecimal amount;
+
+    <span class="a">@Size</span>(max = 255, message = <span class="s">"Remarks cannot exceed 255 characters"</span>)
+    <span class="k">private</span> String remarks;
+
+    <span class="a">@AssertTrue</span>(message = <span class="s">"Provide exactly one of destinationAccountId or beneficiaryId"</span>)
+    <span class="k">public boolean</span> isTargetExclusive() {
+        <span class="k">return</span> (destinationAccountId != <span class="k">null</span>) ^ (beneficiaryId != <span class="k">null</span>);
+    }
+
+    <span class="a">@AssertTrue</span>(message = <span class="s">"Source and destination account cannot be the same"</span>)
+    <span class="k">public boolean</span> isNotSelfTransfer() {
+        <span class="k">if</span> (sourceAccountId == <span class="k">null</span> || destinationAccountId == <span class="k">null</span>) <span class="k">return true</span>;
+        <span class="k">return</span> !sourceAccountId.equals(destinationAccountId);
+    }
+}</pre>
+
+  <div class="tip">
+    <strong>Bean Validation Best Practice (Null Handling):</strong> Notice how <code>MinimumAgeValidator</code> and <code>isNotSelfTransfer()</code> return <code>true</code> when a field is <code>null</code>. That is standard Jakarta Validation convention so <code>@NotNull</code> reports missing fields without duplicate misleading messages!
+  </div>
+
+  <h2>5. Planned Code: DTO &amp; Controller Hardening Summary</h2>
+  <p>Additional surgical updates across existing DTOs and Controllers:</p>
+
+  <div class="file-header">
+    <span>Hardened Request DTOs (Monetary Precision, Auth Password Match &amp; Customer Age)</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// 1. DepositRequest.java &amp; WithdrawRequest.java</span>
+<span class="a">@NotNull</span>(message = <span class="s">"Account id is required"</span>)
+<span class="a">@Positive</span>(message = <span class="s">"Account id must be positive"</span>)
+<span class="k">private</span> Long accountId;
+
+<span class="a">@NotNull</span>(message = <span class="s">"Amount is required"</span>)
+<span class="a">@DecimalMin</span>(value = <span class="s">"1.00"</span>, message = <span class="s">"Amount must be at least 1.00"</span>)
+<span class="a">@Digits</span>(integer = 16, fraction = 2, message = <span class="s">"Amount must have at most 2 decimal places"</span>)
+<span class="k">private</span> BigDecimal amount;
+
+<span class="c">// 2. CreateAccountRequest.java &amp; CreateLoanRequest.java</span>
+<span class="a">@Positive</span>(message = <span class="s">"Customer id must be positive"</span>) <span class="k">private</span> Long customerId;
+<span class="a">@Digits</span>(integer = 16, fraction = 2, message = <span class="s">"Amount must have at most 2 decimal places"</span>) <span class="k">private</span> BigDecimal openingBalance; <span class="c">// &amp; principalAmount</span>
+<span class="a">@Digits</span>(integer = 3, fraction = 2, message = <span class="s">"Interest rate format invalid"</span>)
+<span class="a">@DecimalMax</span>(value = <span class="s">"40.00"</span>, message = <span class="s">"Interest rate cannot exceed 40%"</span>) <span class="k">private</span> BigDecimal interestRate;
+
+<span class="c">// 3. CreateCustomerRequest.java &amp; UpdateCustomerRequest.java</span>
+<span class="a">@NotNull</span>(message = <span class="s">"Date of birth is required"</span>)
+<span class="a">@Past</span>(message = <span class="s">"Date of birth must be in the past"</span>)
+<span class="a">@MinimumAge</span>(value = 18, message = <span class="s">"Customer must be at least 18 years old for banking KYC"</span>)
+<span class="k">private</span> LocalDate dateOfBirth;
+
+<span class="c">// 4. RegisterRequest.java / ResetPasswordRequest.java / ChangePassowordRequest.java</span>
+<span class="a">@AssertTrue</span>(message = <span class="s">"Password and confirmPassword do not match"</span>)
+<span class="k">public boolean</span> isPasswordsMatching() {
+    <span class="k">if</span> (password == <span class="k">null</span> || confirmPassword == <span class="k">null</span>) <span class="k">return true</span>;
+    <span class="k">return</span> password.equals(confirmPassword);
+}</pre>
+
+  <div class="file-header">
+    <span>Controllers: PathVariable &amp; RequestParam Validation (@Validated)</span>
+    <span>MODIFIED (All 8 Controllers)</span>
+  </div>
+  <pre class="code"><span class="k">import</span> jakarta.validation.constraints.NotBlank;
+<span class="k">import</span> jakarta.validation.constraints.Positive;
+<span class="k">import</span> org.springframework.validation.annotation.Validated;
+
+<span class="a">@Validated</span>
+<span class="a">@RestController</span>
+<span class="a">@RequestMapping</span>(<span class="s">"/api/v1/accounts"</span>)
+<span class="k">public class</span> AccountController {
+
+    <span class="a">@GetMapping</span>(<span class="s">"/{accountId}"</span>)
+    <span class="k">public</span> ResponseEntity&lt;AccountResponse&gt; getAccountById(
+            <span class="a">@PathVariable</span> <span class="a">@Positive</span>(message = <span class="s">"Account id must be positive"</span>) Long accountId) { ... }
+
+    <span class="a">@GetMapping</span>(<span class="s">"/number/{accountNumber}"</span>)
+    <span class="k">public</span> ResponseEntity&lt;AccountResponse&gt; getAccountByAccountNumber(
+            <span class="a">@PathVariable</span> <span class="a">@NotBlank</span>(message = <span class="s">"Account number is required"</span>) String accountNumber) { ... }
+}</pre>
+
+  <h2>6. Verification Checklist (curl Tests)</h2>
+  <table>
+    <tr>
+      <th style="width: 30%;">Test Scenario</th>
+      <th style="width: 48%;">Sample Request</th>
+      <th style="width: 22%;">Expected Response</th>
+    </tr>
+    <tr>
+      <td>Negative Path ID</td>
+      <td><code>GET /api/v1/accounts/-5</code></td>
+      <td><code>400</code> (<code>fieldErrors.accountId</code>)</td>
+    </tr>
+    <tr>
+      <td>Sub-paise Decimal Precision</td>
+      <td><code>POST /api/v1/transactions/deposit</code> <code>{"accountId":1,"amount":10.123}</code></td>
+      <td><code>400</code> (<code>amount: at most 2 decimals</code>)</td>
+    </tr>
+    <tr>
+      <td>Both Transfer Targets Set</td>
+      <td><code>POST /api/v1/transactions/transfer</code> (both <code>destinationAccountId</code> &amp; <code>beneficiaryId</code>)</td>
+      <td><code>400</code> (<code>targetExclusive</code> failure)</td>
+    </tr>
+    <tr>
+      <td>Underage / Future DOB</td>
+      <td><code>POST /api/v1/customers</code> with <code>dateOfBirth: "2020-01-01"</code></td>
+      <td><code>400</code> (<code>MinimumAge</code> error)</td>
+    </tr>
+    <tr>
+      <td>Invalid Enum / Malformed JSON</td>
+      <td><code>POST /api/v1/loans</code> with <code>"loanType": "CRYPTO"</code></td>
+      <td><code>400</code> (NOT 500!)</td>
+    </tr>
+  </table>
+
+</body>
+</html>

@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day 79: Dynamic Search APIs &amp; JPA Specifications - Study Notes &amp; Implementation Plan</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm 15mm 12mm;
+  }
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #cbd5e1;
+    --soft: #f8fafc;
+    --brand: #0f2b46;
+    --brand-light: #1e3a8a;
+    --accent: #0284c7;
+    --ok: #15803d;
+    --ok-bg: #dcfce7;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --bad: #b91c1c;
+    --bad-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    font-size: 9.5pt;
+    line-height: 1.48;
+    margin: 0;
+    background: #fff;
+  }
+  .header-card {
+    background: linear-gradient(135deg, #064e3b 0%, #0f766e 100%);
+    color: #fff;
+    padding: 13mm 11mm;
+    border-radius: 6px;
+    margin-bottom: 5mm;
+  }
+  .badge-row { margin-bottom: 3mm; }
+  .badge {
+    display: inline-block;
+    padding: 0.8mm 2.2mm;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 1.5mm;
+  }
+  .badge-day { background: #38bdf8; color: #082f49; }
+  .badge-topic { background: rgba(255, 255, 255, 0.2); color: #fff; }
+  .badge-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #86efac; }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde047; }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); border: 1px solid #fca5a5; }
+  .header-card h1 { font-size: 21pt; margin: 0 0 2mm; font-weight: 700; line-height: 1.2; }
+  .header-card p.subtitle { font-size: 10.5pt; margin: 0 0 4mm; opacity: 0.92; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    padding-top: 3mm;
+    font-size: 8.4pt;
+  }
+  .header-card .meta-grid div span {
+    display: block;
+    opacity: 0.72;
+    font-size: 7.2pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  h2 {
+    font-size: 13.5pt;
+    color: var(--brand);
+    border-bottom: 2px solid var(--brand);
+    padding-bottom: 1.2mm;
+    margin: 6mm 0 2.5mm;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 10.8pt; color: var(--brand-light); margin: 4mm 0 1.5mm; page-break-after: avoid; }
+  h4 { font-size: 9.6pt; color: #334155; margin: 2.5mm 0 1mm; page-break-after: avoid; }
+  p { margin: 1mm 0 2.3mm; }
+  ul, ol { margin: 1mm 0 2.8mm; padding-left: 5mm; }
+  li { margin-bottom: 0.8mm; }
+  code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 8.3pt;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0.2mm 1mm;
+    border-radius: 3px;
+  }
+  .file-header {
+    background: #1e293b;
+    color: #cbd5e1;
+    padding: 1.5mm 3mm;
+    font-size: 7.8pt;
+    font-family: "Cascadia Code", Consolas, monospace;
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid #334155;
+    margin-top: 2.5mm;
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm 4mm;
+    flex-wrap: wrap;
+    page-break-after: avoid;
+  }
+  .file-header + pre.code { margin-top: 0; border-radius: 0 0 4px 4px; }
+  pre.code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 7.9pt;
+    line-height: 1.38;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 2.8mm 3.6mm;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 2mm 0 3.5mm;
+    border-left: 3.5px solid #0d9488;
+  }
+  pre.code .c { color: #94a3b8; font-style: italic; }
+  pre.code .k { color: #38bdf8; font-weight: bold; }
+  pre.code .s { color: #4ade80; }
+  pre.code .a { color: #facc15; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 3.5mm;
+    font-size: 8.4pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #1e293b;
+    color: #fff;
+    text-align: left;
+    padding: 1.8mm 2.3mm;
+    font-weight: 600;
+  }
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 1.6mm 2.3mm;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .note {
+    border-left: 3.5px solid var(--accent);
+    background: #f0f9ff;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .warn {
+    border-left: 3.5px solid var(--warn);
+    background: #fffbeb;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .tip {
+    border-left: 3.5px solid var(--ok);
+    background: #f0fdf4;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .diagram-box {
+    background: #0f172a;
+    color: #5eead4;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 7.4pt;
+    padding: 2.8mm 3.5mm;
+    border-radius: 4px;
+    margin: 2mm 0 3.5mm;
+    line-height: 1.38;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    page-break-inside: avoid;
+  }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+  <div class="header-card">
+    <div class="badge-row">
+      <span class="badge badge-day">DAY 79</span>
+      <span class="badge badge-topic">DYNAMIC SEARCH APIS</span>
+      <span class="badge badge-topic">JPA SPECIFICATIONS</span>
+      <span class="badge badge-topic">SQL INJECTION &amp; WILDCARD SAFE</span>
+    </div>
+    <h1>Dynamic Multi-Criteria Search APIs</h1>
+    <p class="subtitle">Study Notes &amp; Planned Implementation Blueprint: Awakening Existing AccountSearchRequest &amp; CustomerSearchRequest DTOs, Building Type-Safe Spring Data JPA 4.1 Specifications, Safe LIKE Wildcard Escaping, and Unifying Validation + Pagination + Sorting.</p>
+    <div class="meta-grid">
+      <div><span>Project</span><strong>Enterprise Digital Banking</strong></div>
+      <div><span>Query Engine</span><strong>JpaSpecificationExecutor</strong></div>
+      <div><span>Spring Data</span><strong>4.1.0 (unrestricted())</strong></div>
+      <div><span>Security</span><strong>LIKE Wildcard Escaper</strong></div>
+    </div>
+  </div>
+
+  <h2>1. Core Concepts: Derived Queries vs. <code>@Query</code> vs. JPA <code>Specification</code></h2>
+  <p>Our codebase already contains two scaffolded search DTOs waiting to be wired: <code>AccountSearchRequest</code> (7 optional filters) and <code>CustomerSearchRequest</code> (7 optional filters), plus we need multi-filter transaction and audit log searches. Supporting 7 optional filters creates 2<sup>7</sup> = 128 filter combinations!</p>
+
+  <table>
+    <tr>
+      <th style="width: 24%;">Search Approach</th>
+      <th style="width: 38%;">How It Works</th>
+      <th style="width: 38%;">Verdict for Enterprise Banking</th>
+    </tr>
+    <tr>
+      <td><strong>Derived Method Names</strong></td>
+      <td><code>findByCityAndKycStatusAndFirstName...</code></td>
+      <td><span class="badge badge-bad">AVOID FOR MULTI-FILTER</span> Combinatorial explosion; acceptable only for simple 1-field lookup.</td>
+    </tr>
+    <tr>
+      <td><strong>Static JPQL <code>(:x IS NULL OR ...)</code></strong></td>
+      <td>Huge hardcoded <code>@Query</code> checking null on every parameter.</td>
+      <td><span class="badge badge-warn">SUBOPTIMAL</span> Clutters SQL plans; MySQL optimizer often skips B-Tree indexes on <code>OR :x IS NULL</code> tricks.</td>
+    </tr>
+    <tr>
+      <td><strong>JPA <code>Specification&lt;T&gt;</code></strong></td>
+      <td>Dynamically appends ONLY the non-null predicates via CriteriaBuilder, then compiles cleanly into parameterized JDBC SQL!</td>
+      <td><span class="badge badge-ok">ENTERPRISE STANDARD</span> Clean SQL containing only active filters, works seamlessly with Day 77 <code>Pageable</code> &amp; Day 78 <code>SortValidator</code>!</td>
+    </tr>
+  </table>
+
+  <div class="diagram-box">GET /api/v1/transactions/search?accountId=1&amp;transactionType=TRANSFER&amp;minAmount=500
+    &amp;page=0&amp;size=20&amp;sort=amount,desc
+   │
+   ├─► Day 76 Bean Validation (@Valid @ModelAttribute TransactionSearchRequest)
+   │      Checks: minAmount &lt;= maxAmount, startDate &lt;= endDate, @Positive IDs
+   │
+   ├─► Day 78 SortValidator.validate(pageable, ALLOWED_TX_SORT_FIELDS, defaultSort)
+   │
+   ├─► Day 79 TransactionSpecification.withFilters(request)
+   │      Dynamically generates ONLY 3 SQL predicates (skips null remarks/reference/status):
+   │      WHERE (source_account_id = ? OR destination_account_id = ?)
+   │        AND transaction_type = ? AND amount &gt;= ?
+   │
+   └─► repository.findAll(spec, validatedPageable) ──► PagedResponse&lt;TransactionSummaryResponse&gt;</div>
+
+  <h2>2. Real Codebase Discovery: Already-Existing Search DTOs</h2>
+  <p>Inspecting <code>src/main/java</code> uncovered two pre-existing search DTOs that have never been connected to repositories or controllers:</p>
+  <ul>
+    <li><code>AccountSearchRequest.java</code>: <code>customerId</code>, <code>accountNumber</code>, <code>accountType</code>, <code>accountStatus</code>, <code>branch</code>, <code>minBalance</code>, <code>maxBalance</code>.</li>
+    <li><code>CustomerSearchRequest.java</code>: <code>customerId</code>, <code>firstName</code>, <code>lastName</code>, <code>phoneNumber</code>, <code>city</code>, <code>state</code>, <code>kycStatus</code>.</li>
+  </ul>
+  <p>In Day 79, we harden both DTOs (cross-field range checks + <code>@Size</code> bounds), create <code>TransactionSearchRequest</code> &amp; <code>AuditSearchRequest</code>, and wire all four end-to-end!</p>
+
+  <div class="warn">
+    <strong>Security Subtlety — LIKE Wildcard Injection (ReDoS / Full Scan):</strong> Criteria <code>cb.like(...)</code> prevents SQL injection via bind variables, but if a user sends <code>?branch=%</code> or <code>?firstName=_____%</code>, SQL treats <code>%</code> and <code>_</code> as wildcards and forces full table scans! We escape <code>\</code>, <code>%</code>, and <code>_</code> cleanly before wrapping in <code>%...%</code>.
+  </div>
+
+  <div class="page-break"></div>
+  <h2>3. Planned Code: Safe Helper, Repositories &amp; Validated Search DTOs</h2>
+
+  <div class="file-header">
+    <span>src/main/java/.../common/util/SpecificationHelper.java</span>
+    <span>NEW</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.common.util;
+
+<span class="k">import</span> jakarta.persistence.criteria.CriteriaBuilder;
+<span class="k">import</span> jakarta.persistence.criteria.Expression;
+<span class="k">import</span> jakarta.persistence.criteria.Predicate;
+
+<span class="k">public final class</span> SpecificationHelper {
+
+    <span class="k">private static final char</span> ESCAPE_CHAR = <span class="s">'\\'</span>;
+
+    <span class="k">private</span> SpecificationHelper() {}
+
+    <span class="c">/** Escapes SQL LIKE wildcards ('%', '_', '\') and performs case-insensitive contains match. */</span>
+    <span class="k">public static</span> Predicate containsIgnoreCase(
+            CriteriaBuilder cb, Expression&lt;String&gt; field, String rawInput) {
+        String escaped = rawInput.trim().toLowerCase()
+                .replace(<span class="s">"\\"</span>, <span class="s">"\\\\"</span>)
+                .replace(<span class="s">"%"</span>, <span class="s">"\\%"</span>)
+                .replace(<span class="s">"_"</span>, <span class="s">"\\_"</span>);
+        <span class="k">return</span> cb.like(cb.lower(field), <span class="s">"%"</span> + escaped + <span class="s">"%"</span>, ESCAPE_CHAR);
+    }
+
+    <span class="k">public static boolean</span> hasText(String value) {
+        <span class="k">return</span> value != <span class="k">null</span> &amp;&amp; !value.isBlank();
+    }
+}</pre>
+
+  <div class="file-header">
+    <span>Repositories: Enable JpaSpecificationExecutor&lt;T&gt;</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="k">import</span> org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
+<span class="k">public interface</span> AccountRepository <span class="k">extends</span> JpaRepository&lt;Account, Long&gt;, JpaSpecificationExecutor&lt;Account&gt; { ... }
+<span class="k">public interface</span> CustomerRepository <span class="k">extends</span> JpaRepository&lt;Customer, Long&gt;, JpaSpecificationExecutor&lt;Customer&gt; { ... }
+<span class="k">public interface</span> TransactionRepository <span class="k">extends</span> JpaRepository&lt;Transaction, Long&gt;, JpaSpecificationExecutor&lt;Transaction&gt; { ... }
+<span class="k">public interface</span> AuditRepository <span class="k">extends</span> JpaRepository&lt;AuditLog, Long&gt;, JpaSpecificationExecutor&lt;AuditLog&gt; { ... }</pre>
+
+  <div class="file-header">
+    <span>AccountSearchRequest.java (Updated) &amp; TransactionSearchRequest.java (New)</span>
+    <span>MODIFIED / NEW</span>
+  </div>
+  <pre class="code"><span class="c">// AccountSearchRequest.java — adding Day 76 Bean Validation range &amp; length rules</span>
+<span class="a">@Positive</span>(message = <span class="s">"Customer id must be positive"</span>) <span class="k">private</span> Long customerId;
+<span class="a">@Size</span>(max = 30) <span class="k">private</span> String accountNumber;
+<span class="k">private</span> AccountType accountType;
+<span class="k">private</span> AccountStatus accountStatus;
+<span class="a">@Size</span>(max = 100) <span class="k">private</span> String branch;
+<span class="a">@DecimalMin</span>(<span class="s">"0.00"</span>) <span class="k">private</span> BigDecimal minBalance;
+<span class="a">@DecimalMin</span>(<span class="s">"0.00"</span>) <span class="k">private</span> BigDecimal maxBalance;
+
+<span class="a">@AssertTrue</span>(message = <span class="s">"minBalance cannot exceed maxBalance"</span>)
+<span class="k">public boolean</span> isBalanceRangeValid() {
+    <span class="k">if</span> (minBalance == <span class="k">null</span> || maxBalance == <span class="k">null</span>) <span class="k">return true</span>;
+    <span class="k">return</span> minBalance.compareTo(maxBalance) &lt;= 0;
+}
+
+<span class="c">// TransactionSearchRequest.java — new multi-criteria transaction &amp; date range filter DTO</span>
+<span class="a">@Data</span> <span class="a">@NoArgsConstructor</span> <span class="a">@AllArgsConstructor</span> <span class="a">@Builder</span>
+<span class="k">public class</span> TransactionSearchRequest {
+    <span class="a">@Positive</span>(message = <span class="s">"Account id must be positive"</span>) <span class="k">private</span> Long accountId;
+    <span class="a">@Size</span>(max = 64) <span class="k">private</span> String transactionReference;
+    <span class="k">private</span> TransactionType transactionType;
+    <span class="k">private</span> TransactionStatus transactionStatus;
+    <span class="a">@DecimalMin</span>(<span class="s">"0.01"</span>) <span class="k">private</span> BigDecimal minAmount;
+    <span class="a">@DecimalMin</span>(<span class="s">"0.01"</span>) <span class="k">private</span> BigDecimal maxAmount;
+    <span class="a">@DateTimeFormat</span>(iso = DateTimeFormat.ISO.DATE_TIME) <span class="k">private</span> LocalDateTime fromDate;
+    <span class="a">@DateTimeFormat</span>(iso = DateTimeFormat.ISO.DATE_TIME) <span class="k">private</span> LocalDateTime toDate;
+    <span class="a">@Size</span>(max = 100) <span class="k">private</span> String remarksKeyword;
+
+    <span class="a">@AssertTrue</span>(message = <span class="s">"minAmount cannot exceed maxAmount"</span>)
+    <span class="k">public boolean</span> isAmountRangeValid() {
+        <span class="k">return</span> minAmount == <span class="k">null</span> || maxAmount == <span class="k">null</span> || minAmount.compareTo(maxAmount) &lt;= 0;
+    }
+
+    <span class="a">@AssertTrue</span>(message = <span class="s">"fromDate cannot be after toDate"</span>)
+    <span class="k">public boolean</span> isDateRangeValid() {
+        <span class="k">return</span> fromDate == <span class="k">null</span> || toDate == <span class="k">null</span> || !fromDate.isAfter(toDate);
+    }
+}</pre>
+
+  <h2>4. Planned Code: Spring Data 4.1 <code>Specification</code> Builders</h2>
+  <p>Notice we use a clean <code>List&lt;Predicate&gt;</code> inside the lambda (avoiding deprecated <code>Specification.where(null)</code> from older Spring Data 2/3 codebases).</p>
+
+  <div class="file-header">
+    <span>src/main/java/.../transaction/specification/TransactionSpecification.java</span>
+    <span>NEW</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.transaction.specification;
+
+<span class="k">import</span> jakarta.persistence.criteria.Predicate;
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.common.util.SpecificationHelper;
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.transaction.dto.request.TransactionSearchRequest;
+<span class="k">import</span> org.example.enterprisedigitalbankingsystem.transaction.entity.Transaction;
+<span class="k">import</span> org.springframework.data.jpa.domain.Specification;
+<span class="k">import</span> java.util.ArrayList;
+<span class="k">import</span> java.util.List;
+
+<span class="k">public final class</span> TransactionSpecification {
+    <span class="k">private</span> TransactionSpecification() {}
+
+    <span class="k">public static</span> Specification&lt;Transaction&gt; withFilters(TransactionSearchRequest filter) {
+        <span class="k">return</span> (root, query, cb) -&gt; {
+            List&lt;Predicate&gt; predicates = <span class="k">new</span> ArrayList&lt;&gt;();
+            <span class="k">if</span> (filter == <span class="k">null</span>) <span class="k">return</span> cb.conjunction();
+
+            <span class="k">if</span> (filter.getAccountId() != <span class="k">null</span>) {
+                Predicate isSource = cb.equal(root.get(<span class="s">"sourceAccount"</span>).get(<span class="s">"id"</span>), filter.getAccountId());
+                Predicate isDest = cb.equal(root.get(<span class="s">"destinationAccount"</span>).get(<span class="s">"id"</span>), filter.getAccountId());
+                predicates.add(cb.or(isSource, isDest));
+            }
+            <span class="k">if</span> (SpecificationHelper.hasText(filter.getTransactionReference())) {
+                predicates.add(cb.equal(root.get(<span class="s">"transactionReference"</span>),
+                        filter.getTransactionReference().trim()));
+            }
+            <span class="k">if</span> (filter.getTransactionType() != <span class="k">null</span>) {
+                predicates.add(cb.equal(root.get(<span class="s">"transactionType"</span>), filter.getTransactionType()));
+            }
+            <span class="k">if</span> (filter.getTransactionStatus() != <span class="k">null</span>) {
+                predicates.add(cb.equal(root.get(<span class="s">"transactionStatus"</span>), filter.getTransactionStatus()));
+            }
+            <span class="k">if</span> (filter.getMinAmount() != <span class="k">null</span>) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get(<span class="s">"amount"</span>), filter.getMinAmount()));
+            }
+            <span class="k">if</span> (filter.getMaxAmount() != <span class="k">null</span>) {
+                predicates.add(cb.lessThanOrEqualTo(root.get(<span class="s">"amount"</span>), filter.getMaxAmount()));
+            }
+            <span class="k">if</span> (filter.getFromDate() != <span class="k">null</span>) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get(<span class="s">"createdAt"</span>), filter.getFromDate()));
+            }
+            <span class="k">if</span> (filter.getToDate() != <span class="k">null</span>) {
+                predicates.add(cb.lessThanOrEqualTo(root.get(<span class="s">"createdAt"</span>), filter.getToDate()));
+            }
+            <span class="k">if</span> (SpecificationHelper.hasText(filter.getRemarksKeyword())) {
+                predicates.add(SpecificationHelper.containsIgnoreCase(
+                        cb, root.get(<span class="s">"remarks"</span>), filter.getRemarksKeyword()));
+            }
+            <span class="k">return</span> cb.and(predicates.toArray(<span class="k">new</span> Predicate[0]));
+        };
+    }
+}</pre>
+
+  <div class="file-header">
+    <span>AccountSpecification.java &amp; CustomerSpecification.java</span>
+    <span>NEW</span>
+  </div>
+  <pre class="code"><span class="c">// AccountSpecification.java (wiring AccountSearchRequest)</span>
+<span class="k">public static</span> Specification&lt;Account&gt; withFilters(AccountSearchRequest f) {
+    <span class="k">return</span> (root, query, cb) -&gt; {
+        List&lt;Predicate&gt; p = <span class="k">new</span> ArrayList&lt;&gt;();
+        <span class="k">if</span> (f == <span class="k">null</span>) <span class="k">return</span> cb.conjunction();
+        <span class="k">if</span> (f.getCustomerId() != <span class="k">null</span>)     p.add(cb.equal(root.get(<span class="s">"customer"</span>).get(<span class="s">"id"</span>), f.getCustomerId()));
+        <span class="k">if</span> (hasText(f.getAccountNumber())) p.add(cb.equal(root.get(<span class="s">"accountNumber"</span>), f.getAccountNumber().trim()));
+        <span class="k">if</span> (f.getAccountType() != <span class="k">null</span>)    p.add(cb.equal(root.get(<span class="s">"accountType"</span>), f.getAccountType()));
+        <span class="k">if</span> (f.getAccountStatus() != <span class="k">null</span>)  p.add(cb.equal(root.get(<span class="s">"accountStatus"</span>), f.getAccountStatus()));
+        <span class="k">if</span> (hasText(f.getBranch()))        p.add(containsIgnoreCase(cb, root.get(<span class="s">"branch"</span>), f.getBranch()));
+        <span class="k">if</span> (f.getMinBalance() != <span class="k">null</span>)     p.add(cb.greaterThanOrEqualTo(root.get(<span class="s">"balance"</span>), f.getMinBalance()));
+        <span class="k">if</span> (f.getMaxBalance() != <span class="k">null</span>)     p.add(cb.lessThanOrEqualTo(root.get(<span class="s">"balance"</span>), f.getMaxBalance()));
+        <span class="k">return</span> cb.and(p.toArray(<span class="k">new</span> Predicate[0]));
+    };
+}
+
+<span class="c">// CustomerSpecification.java (wiring CustomerSearchRequest + optional keyword convenience)</span>
+<span class="k">public static</span> Specification&lt;Customer&gt; withFilters(CustomerSearchRequest f) {
+    <span class="k">return</span> (root, query, cb) -&gt; {
+        List&lt;Predicate&gt; p = <span class="k">new</span> ArrayList&lt;&gt;();
+        <span class="k">if</span> (f == <span class="k">null</span>) <span class="k">return</span> cb.conjunction();
+        <span class="k">if</span> (f.getCustomerId() != <span class="k">null</span>)   p.add(cb.equal(root.get(<span class="s">"id"</span>), f.getCustomerId()));
+        <span class="k">if</span> (hasText(f.getFirstName()))   p.add(containsIgnoreCase(cb, root.get(<span class="s">"firstName"</span>), f.getFirstName()));
+        <span class="k">if</span> (hasText(f.getLastName()))    p.add(containsIgnoreCase(cb, root.get(<span class="s">"lastName"</span>), f.getLastName()));
+        <span class="k">if</span> (hasText(f.getPhoneNumber())) p.add(cb.equal(root.get(<span class="s">"phoneNumber"</span>), f.getPhoneNumber().trim()));
+        <span class="k">if</span> (hasText(f.getCity()))        p.add(containsIgnoreCase(cb, root.get(<span class="s">"city"</span>), f.getCity()));
+        <span class="k">if</span> (hasText(f.getState()))       p.add(containsIgnoreCase(cb, root.get(<span class="s">"state"</span>), f.getState()));
+        <span class="k">if</span> (f.getKycStatus() != <span class="k">null</span>)    p.add(cb.equal(root.get(<span class="s">"kycStatus"</span>), f.getKycStatus()));
+        <span class="k">return</span> cb.and(p.toArray(<span class="k">new</span> Predicate[0]));
+    };
+}</pre>
+
+  <h2>5. Planned Code: Unified Search Controllers &amp; Services</h2>
+
+  <div class="file-header">
+    <span>TransactionController, AccountController, CustomerController &amp; AuditController (/search)</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// Using GET + @ModelAttribute + @Valid combines URL query filters, Pageable, Sort, &amp; Bean Validation!</span>
+
+<span class="c">// 1. TransactionController.java</span>
+<span class="a">@GetMapping</span>(<span class="s">"/search"</span>)
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;TransactionSummaryResponse&gt;&gt; searchTransactions(
+        <span class="a">@Valid</span> <span class="a">@ModelAttribute</span> TransactionSearchRequest filter,
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(transactionService.searchTransactions(filter, pageable));
+}
+
+<span class="c">// 2. AccountController.java</span>
+<span class="a">@GetMapping</span>(<span class="s">"/search"</span>)
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;AccountSummaryResponse&gt;&gt; searchAccounts(
+        <span class="a">@Valid</span> <span class="a">@ModelAttribute</span> AccountSearchRequest filter,
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(accountService.searchAccounts(filter, pageable));
+}
+
+<span class="c">// 3. CustomerController.java</span>
+<span class="a">@GetMapping</span>(<span class="s">"/search"</span>)
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;CustomerSummaryResponse&gt;&gt; searchCustomers(
+        <span class="a">@Valid</span> <span class="a">@ModelAttribute</span> CustomerSearchRequest filter,
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(customerService.searchCustomers(filter, pageable));
+}
+
+<span class="c">// Inside ServiceImpl (e.g., TransactionServiceImpl using TransactionSpecification):</span>
+Pageable validated = SortValidator.validate(pageable, ALLOWED_SORT_FIELDS, DEFAULT_SORT);
+<span class="k">return</span> PagedResponse.from(repository.findAll(TransactionSpecification.withFilters(filter), validated).map(mapper::toSummaryResponse));</pre>
+
+  <div class="tip">
+    <strong>Why <code>root.get("sourceAccount").get("id")</code> is Fast &amp; Join-Safe:</strong> Accessing the FK attribute via <code>root.get("customer").get("id")</code> references the foreign-key column <code>customer_id</code> directly in the <code>accounts</code> table <em>without</em> issuing an unnecessary SQL <code>INNER JOIN customers</code>! That prevents duplicate rows in <code>COUNT(*)</code> pagination queries and leverages Day 70's B-Tree indexes directly.
+  </div>
+
+  <h2>6. Verification &amp; Testing Commands (curl)</h2>
+  <table>
+    <tr>
+      <th style="width: 30%;">Search Scenario</th>
+      <th style="width: 48%;">HTTP Request</th>
+      <th style="width: 22%;">Expected Result</th>
+    </tr>
+    <tr>
+      <td>Filter Accounts by Type &amp; Balance Range</td>
+      <td><code>GET /api/v1/accounts/search?accountType=SAVINGS&amp;minBalance=1000&amp;sort=balance,desc</code></td>
+      <td><code>200 OK</code>, sorted savings accounts &ge; 1000.</td>
+    </tr>
+    <tr>
+      <td>Search Transactions by Date Window</td>
+      <td><code>GET /api/v1/transactions/search?accountId=1&amp;fromDate=2026-11-01T00:00:00&amp;transactionType=DEPOSIT</code></td>
+      <td><code>200 OK</code>, filtered &amp; paginated matches.</td>
+    </tr>
+    <tr>
+      <td>Invalid Range Cross-Check</td>
+      <td><code>GET /api/v1/accounts/search?minBalance=5000&amp;maxBalance=100</code></td>
+      <td><code>400 Bad Request</code> (Day 76 + Day 79 guard).</td>
+    </tr>
+    <tr>
+      <td>Wildcard Escape Protection</td>
+      <td><code>GET /api/v1/customers/search?firstName=%25</code></td>
+      <td>Escaped literal <code>\%</code> match — zero full-table dump!</td>
+    </tr>
+  </table>
+
+</body>
+</html>

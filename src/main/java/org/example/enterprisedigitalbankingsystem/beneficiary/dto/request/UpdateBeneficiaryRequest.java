@@ -16,6 +16,6 @@ import lombok.Setter;
 public class UpdateBeneficiaryRequest {
 
     @NotBlank(message = "Nickname is required")
-    @Size(max = 100, message = "Nickname cannot exceed 100 characters")
+    @Size(min = 2, max = 100, message = "Nickname must be between 2 and 100 characters")
     private String nickName;
 }

@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day 77: Pagination &amp; Pageable APIs - Study Notes &amp; Implementation Plan</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm 15mm 12mm;
+  }
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #cbd5e1;
+    --soft: #f8fafc;
+    --brand: #0f2b46;
+    --brand-light: #1e3a8a;
+    --accent: #0284c7;
+    --ok: #15803d;
+    --ok-bg: #dcfce7;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --bad: #b91c1c;
+    --bad-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    font-size: 9.5pt;
+    line-height: 1.48;
+    margin: 0;
+    background: #fff;
+  }
+  .header-card {
+    background: linear-gradient(135deg, #091c33 0%, #0e7490 100%);
+    color: #fff;
+    padding: 13mm 11mm;
+    border-radius: 6px;
+    margin-bottom: 5mm;
+  }
+  .badge-row { margin-bottom: 3mm; }
+  .badge {
+    display: inline-block;
+    padding: 0.8mm 2.2mm;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 1.5mm;
+  }
+  .badge-day { background: #38bdf8; color: #082f49; }
+  .badge-topic { background: rgba(255, 255, 255, 0.2); color: #fff; }
+  .badge-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #86efac; }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #fde047; }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); border: 1px solid #fca5a5; }
+  .header-card h1 { font-size: 21pt; margin: 0 0 2mm; font-weight: 700; line-height: 1.2; }
+  .header-card p.subtitle { font-size: 10.5pt; margin: 0 0 4mm; opacity: 0.92; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3mm;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    padding-top: 3mm;
+    font-size: 8.4pt;
+  }
+  .header-card .meta-grid div span {
+    display: block;
+    opacity: 0.72;
+    font-size: 7.2pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  h2 {
+    font-size: 13.5pt;
+    color: var(--brand);
+    border-bottom: 2px solid var(--brand);
+    padding-bottom: 1.2mm;
+    margin: 6mm 0 2.5mm;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 10.8pt; color: var(--brand-light); margin: 4mm 0 1.5mm; page-break-after: avoid; }
+  h4 { font-size: 9.6pt; color: #334155; margin: 2.5mm 0 1mm; page-break-after: avoid; }
+  p { margin: 1mm 0 2.3mm; }
+  ul, ol { margin: 1mm 0 2.8mm; padding-left: 5mm; }
+  li { margin-bottom: 0.8mm; }
+  code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 8.3pt;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0.2mm 1mm;
+    border-radius: 3px;
+  }
+  .file-header {
+    background: #1e293b;
+    color: #cbd5e1;
+    padding: 1.5mm 3mm;
+    font-size: 7.8pt;
+    font-family: "Cascadia Code", Consolas, monospace;
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid #334155;
+    margin-top: 2.5mm;
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm 4mm;
+    flex-wrap: wrap;
+    page-break-after: avoid;
+  }
+  .file-header + pre.code { margin-top: 0; border-radius: 0 0 4px 4px; }
+  pre.code {
+    font-family: "Cascadia Code", "Consolas", Monaco, monospace;
+    font-size: 7.9pt;
+    line-height: 1.38;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 2.8mm 3.6mm;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 2mm 0 3.5mm;
+    border-left: 3.5px solid var(--accent);
+  }
+  pre.code .c { color: #94a3b8; font-style: italic; }
+  pre.code .k { color: #38bdf8; font-weight: bold; }
+  pre.code .s { color: #4ade80; }
+  pre.code .a { color: #facc15; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 3.5mm;
+    font-size: 8.4pt;
+    page-break-inside: avoid;
+  }
+  th {
+    background: #1e293b;
+    color: #fff;
+    text-align: left;
+    padding: 1.8mm 2.3mm;
+    font-weight: 600;
+  }
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 1.6mm 2.3mm;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .note {
+    border-left: 3.5px solid var(--accent);
+    background: #f0f9ff;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .warn {
+    border-left: 3.5px solid var(--warn);
+    background: #fffbeb;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .tip {
+    border-left: 3.5px solid var(--ok);
+    background: #f0fdf4;
+    padding: 2.2mm 3.2mm;
+    margin: 2.5mm 0;
+    border-radius: 0 4px 4px 0;
+    page-break-inside: avoid;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3mm;
+    margin: 2mm 0 3.5mm;
+    page-break-inside: avoid;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2.3mm 3mm;
+    background: #fff;
+  }
+  .card h4 { margin-top: 0; color: var(--brand); }
+  .diagram-box {
+    background: #0f172a;
+    color: #38bdf8;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 7.8pt;
+    padding: 2.8mm 3.5mm;
+    border-radius: 4px;
+    margin: 2mm 0 3.5mm;
+    line-height: 1.38;
+    white-space: pre;
+    page-break-inside: avoid;
+  }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+  <div class="header-card">
+    <div class="badge-row">
+      <span class="badge badge-day">DAY 77</span>
+      <span class="badge badge-topic">PAGINATION</span>
+      <span class="badge badge-topic">SPRING DATA PAGEABLE</span>
+      <span class="badge badge-topic">DTO WRAPPER &amp; REDIS</span>
+    </div>
+    <h1>Pagination &amp; Pageable Banking APIs</h1>
+    <p class="subtitle">Study Notes &amp; Planned Implementation Blueprint: Bounding Unbounded List Queries with Spring Data Pageable, DoS Page-Size Limits, Jackson 3 / Redis-Safe PagedResponse&lt;T&gt;, and Day 70 Composite Index Alignment.</p>
+    <div class="meta-grid">
+      <div><span>Project</span><strong>Enterprise Digital Banking</strong></div>
+      <div><span>Spring Data</span><strong>Commons &amp; JPA 4.1.0</strong></div>
+      <div><span>Response Shape</span><strong>PagedResponse&lt;T&gt;</strong></div>
+      <div><span>Max Page Cap</span><strong>100 Records / Call</strong></div>
+    </div>
+  </div>
+
+  <h2>1. Core Concepts: Why Unbounded <code>List&lt;T&gt;</code> Endpoints Fail at Scale</h2>
+  <p>Today, every list endpoint in our codebase (<code>TransactionController.getTransactionHistory</code>, <code>AuditController.getAllAuditLogs</code>, <code>LedgerController.getLedgerByAccount</code>, <code>CustomerController.getAllCustomers</code>, etc.) returns a full <code>List&lt;T&gt;</code>. With 10 rows in development it feels fast; with 500,000 ledger entries in production, a single <code>GET /history</code> loads half a million entities into JVM heap, triggers GC pauses, saturates network bandwidth, and crashes clients.</p>
+
+  <div class="diagram-box">Client: GET /api/v1/transactions/account/1/history?page=0&amp;size=20
+   │
+   ▼ Spring Web HandlerMethodArgumentResolver (clamps size &lt;= max-page-size=100)
+Pageable(page=0, size=20)
+   │
+   ├─► Query 1 (Data Slice): SELECT ... FROM transactions WHERE ... LIMIT 20 OFFSET 0
+   │                          (Uses Day 70 B-Tree Index idx_tx_source_created!)
+   ├─► Query 2 (Count Total): SELECT COUNT(t.id) FROM transactions WHERE ...
+   │                          (Skipped automatically if slice size &lt; limit or Slice&lt;T&gt; used)
+   ▼
+Page&lt;Transaction&gt;.map(transactionMapper::toSummaryResponse) ──► PagedResponse&lt;T&gt; JSON</div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4><code>Page&lt;T&gt;</code> vs <code>Slice&lt;T&gt;</code> vs <code>List&lt;T&gt;</code></h4>
+      <ul>
+        <li><code>List&lt;T&gt;</code>: No SQL <code>LIMIT</code>, dangerous for unbounded tables.</li>
+        <li><code>Page&lt;T&gt;</code>: Executes <strong>2 SQL queries</strong> (data slice + <code>COUNT(*)</code>). Best for admin tables needing total pages &amp; jump-to-page UI.</li>
+        <li><code>Slice&lt;T&gt;</code>: Requests <code>size + 1</code> rows to set <code>hasNext</code> with <strong>NO <code>COUNT(*)</code></strong> query! Best for infinite mobile scroll feeds.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Why Custom <code>PagedResponse&lt;T&gt;</code> Over Raw <code>Page&lt;T&gt;</code>?</h4>
+      <ul>
+        <li>Spring Data 4 warns when serializing raw <code>PageImpl</code> directly to JSON: internal structure is unstable across versions.</li>
+        <li><code>RedisCacheConfig</code> cannot safely serialize/deserialize raw <code>PageImpl</code> (used by <code>AccountServiceImpl</code>!).</li>
+        <li>A lean <code>PagedResponse&lt;T&gt;</code> exposes an explicit, clean JSON API contract &amp; Swagger schema.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>2. Codebase Audit: Endpoints to Convert from <code>List&lt;T&gt;</code> to <code>PagedResponse&lt;T&gt;</code></h2>
+  <table>
+    <tr>
+      <th style="width: 24%;">Module / Controller</th>
+      <th style="width: 34%;">Endpoint</th>
+      <th style="width: 14%;">Growth Risk</th>
+      <th style="width: 28%;">Day 77 Design Decision</th>
+    </tr>
+    <tr>
+      <td><strong>TransactionController</strong></td>
+      <td><code>GET /api/v1/transactions/account/{accountId}/history</code></td>
+      <td><span class="badge badge-bad">CRITICAL</span></td>
+      <td>Primary target! Default <code>size=20</code>, mapped via <code>TransactionSummaryResponse</code>. Also used by <code>load-test.ps1</code> (returns <code>200 OK</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>LedgerController</strong></td>
+      <td><code>GET /api/v1/ledger/account/{accountId}</code></td>
+      <td><span class="badge badge-bad">CRITICAL</span></td>
+      <td>Double-entry ledger grows 2x per transfer! Paginate with <code>size=20</code> using <code>idx_ledger_account_created</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>AuditController</strong></td>
+      <td><code>GET /api/v1/audit</code>, <code>/entity/...</code>, <code>/user/...</code></td>
+      <td><span class="badge badge-bad">HIGH</span></td>
+      <td>Audit logs grow infinitely; all 3 list methods must accept <code>Pageable</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>CustomerController</strong></td>
+      <td><code>GET /api/v1/customers</code></td>
+      <td><span class="badge badge-warn">HIGH</span></td>
+      <td>Calls <code>customerRepository.findAll(pageable)</code> directly instead of <code>findAll()</code>!</td>
+    </tr>
+    <tr>
+      <td><strong>AccountController</strong></td>
+      <td><code>GET /api/v1/accounts/customer/{customerId}</code></td>
+      <td><span class="badge badge-warn">MEDIUM</span></td>
+      <td>Update Redis <code>@Cacheable</code> key in <code>AccountServiceImpl</code> to include page/size/sort!</td>
+    </tr>
+    <tr>
+      <td><strong>Loan / Beneficiary / EMI</strong></td>
+      <td><code>/loans/customer/{id}</code>, <code>/beneficiaries/customer/{id}</code>, <code>/emis/loan/{id}</code></td>
+      <td><span class="badge badge-ok">LOW-MED</span></td>
+      <td>Standardize every collection API on <code>PagedResponse&lt;T&gt;</code> for uniform client SDKs.</td>
+    </tr>
+  </table>
+
+  <div class="warn">
+    <strong>Important Note on <code>LedgerController.getLedgerByTransaction</code>:</strong> A single transaction produces at most <strong>2 ledger entries</strong> (1 DEBIT + 1 CREDIT). Keeping <code>/ledger/transaction/{transactionId}</code> as a small bounded list (or paginated if standardized) is worth noting, while <code>/ledger/account/{accountId}</code> MUST be paginated.
+  </div>
+
+  <div class="page-break"></div>
+  <h2>3. Planned Code: Universal <code>PagedResponse&lt;T&gt;</code> &amp; Safeguard Properties</h2>
+
+  <div class="file-header">
+    <span>src/main/resources/application.properties (Pagination DoS Safeguards)</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c"># =============================================================================
+# Spring Data Web Pagination Safeguards (Day 77)
+# =============================================================================</span>
+spring.data.web.pageable.default-page-size=20
+spring.data.web.pageable.max-page-size=100
+spring.data.web.pageable.one-indexed-parameters=false
+spring.data.web.pageable.page-parameter=page
+spring.data.web.pageable.size-parameter=size</pre>
+
+  <div class="note">
+    <strong>DoS Protection:</strong> Setting <code>max-page-size=100</code> stops any attacker or buggy frontend from calling <code>?size=9999999</code> to crash JVM memory. Spring MVC automatically caps oversized requests down to <code>100</code>.
+  </div>
+
+  <div class="file-header">
+    <span>src/main/java/.../common/dto/PagedResponse.java</span>
+    <span>NEW</span>
+  </div>
+  <pre class="code"><span class="k">package</span> org.example.enterprisedigitalbankingsystem.common.dto;
+
+<span class="k">import</span> lombok.*;
+<span class="k">import</span> org.springframework.data.domain.Page;
+<span class="k">import</span> java.io.Serializable;
+<span class="k">import</span> java.util.List;
+
+<span class="a">@Getter</span> <span class="a">@Setter</span> <span class="a">@NoArgsConstructor</span> <span class="a">@AllArgsConstructor</span> <span class="a">@Builder</span>
+<span class="k">public class</span> PagedResponse&lt;T&gt; <span class="k">implements</span> Serializable {
+
+    <span class="k">private static final long</span> serialVersionUID = 1L;
+
+    <span class="k">private</span> List&lt;T&gt; content;
+    <span class="k">private int</span> page;
+    <span class="k">private int</span> size;
+    <span class="k">private long</span> totalElements;
+    <span class="k">private int</span> totalPages;
+    <span class="k">private boolean</span> first;
+    <span class="k">private boolean</span> last;
+    <span class="k">private boolean</span> empty;
+
+    <span class="k">public static</span> &lt;T&gt; PagedResponse&lt;T&gt; from(Page&lt;T&gt; springPage) {
+        <span class="k">return</span> PagedResponse.&lt;T&gt;builder()
+                .content(springPage.getContent())
+                .page(springPage.getNumber())
+                .size(springPage.getSize())
+                .totalElements(springPage.getTotalElements())
+                .totalPages(springPage.getTotalPages())
+                .first(springPage.isFirst())
+                .last(springPage.isLast())
+                .empty(springPage.isEmpty())
+                .build();
+    }
+}</pre>
+
+  <h2>4. Planned Code: Repositories (Spring Data <code>Pageable</code> Queries)</h2>
+
+  <div class="file-header">
+    <span>TransactionRepository.java, LedgerRepository.java &amp; AuditRepository.java</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// 1. TransactionRepository.java</span>
+<span class="k">import</span> org.springframework.data.domain.Page;
+<span class="k">import</span> org.springframework.data.domain.Pageable;
+
+<span class="k">public interface</span> TransactionRepository <span class="k">extends</span> JpaRepository&lt;Transaction, Long&gt; {
+    Optional&lt;Transaction&gt; findByTransactionReference(String transactionReference);
+    <span class="k">boolean</span> existsByTransactionReference(String transactionReference);
+
+    Page&lt;Transaction&gt; findBySourceAccountIdOrDestinationAccountId(
+            Long sourceAccountId, Long destinationAccountId, Pageable pageable);
+}
+
+<span class="c">// 2. LedgerRepository.java</span>
+<span class="k">public interface</span> LedgerRepository <span class="k">extends</span> JpaRepository&lt;LedgerEntry, Long&gt; {
+    Page&lt;LedgerEntry&gt; findByAccountId(Long accountId, Pageable pageable);
+    List&lt;LedgerEntry&gt; findByTransactionId(Long transactionId);
+}
+
+<span class="c">// 3. AuditRepository.java</span>
+<span class="k">public interface</span> AuditRepository <span class="k">extends</span> JpaRepository&lt;AuditLog, Long&gt; {
+    Page&lt;AuditLog&gt; findAll(Pageable pageable);
+    Page&lt;AuditLog&gt; findByEntityNameAndEntityId(String entityName, String entityId, Pageable pageable);
+    Page&lt;AuditLog&gt; findByPerformedBy_UserId(UUID userId, Pageable pageable);
+}
+
+<span class="c">// 4. AccountRepository, LoanRepository, BeneficiaryRepository, EmiRepository</span>
+Page&lt;Account&gt; findByCustomerId(Long customerId, Pageable pageable);
+Page&lt;Loan&gt; findByCustomerId(Long customerId, Pageable pageable);
+Page&lt;Beneficiary&gt; findByCustomerId(Long customerId, Pageable pageable);
+Page&lt;Emi&gt; findByLoanId(Long loanId, Pageable pageable);</pre>
+
+  <h2>5. Planned Code: Services &amp; Controllers</h2>
+
+  <div class="file-header">
+    <span>TransactionService.java, TransactionServiceImpl.java &amp; TransactionController.java</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// TransactionService.java</span>
+PagedResponse&lt;TransactionSummaryResponse&gt; getTransactionHistory(Long accountId, Pageable pageable);
+
+<span class="c">// TransactionServiceImpl.java</span>
+<span class="a">@Override</span>
+<span class="a">@Transactional</span>(readOnly = <span class="k">true</span>)
+<span class="k">public</span> PagedResponse&lt;TransactionSummaryResponse&gt; getTransactionHistory(Long accountId, Pageable pageable) {
+    <span class="k">if</span> (!accountRepository.existsById(accountId)) {
+        <span class="k">throw new</span> ResourceNotFoundException(<span class="s">"Account not found with id: "</span> + accountId);
+    }
+    Page&lt;TransactionSummaryResponse&gt; mapped = transactionRepository
+            .findBySourceAccountIdOrDestinationAccountId(accountId, accountId, pageable)
+            .map(transactionMapper::toSummaryResponse);
+    <span class="k">return</span> PagedResponse.from(mapped);
+}
+
+<span class="c">// TransactionController.java</span>
+<span class="a">@GetMapping</span>(<span class="s">"/account/{accountId}/history"</span>)
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;TransactionSummaryResponse&gt;&gt; getTransactionHistory(
+        <span class="a">@PathVariable</span> <span class="a">@Positive</span> Long accountId,
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(transactionService.getTransactionHistory(accountId, pageable));
+}</pre>
+
+  <div class="file-header">
+    <span>AccountServiceImpl.java (Redis Cache Key Harmonization) &amp; Summary DTO Serialization</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// Ensure AccountSummaryResponse implements Serializable so RedisCacheManager handles PagedResponse cleanly!</span>
+<span class="a">@Override</span>
+<span class="a">@Transactional</span>(readOnly = <span class="k">true</span>)
+<span class="a">@Cacheable</span>(value = <span class="s">"accountsByCustomer"</span>,
+           key = <span class="s">"#customerId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()"</span>)
+<span class="k">public</span> PagedResponse&lt;AccountSummaryResponse&gt; getAccountsByCustomerId(Long customerId, Pageable pageable) {
+    <span class="k">if</span> (!customerRepository.existsById(customerId)) {
+        <span class="k">throw new</span> ResourceNotFoundException(<span class="s">"Customer not found with id: "</span> + customerId);
+    }
+    Page&lt;AccountSummaryResponse&gt; page = accountRepository.findByCustomerId(customerId, pageable)
+            .map(accountMapper::toSummaryResponse);
+    <span class="k">return</span> PagedResponse.from(page);
+}</pre>
+
+  <div class="tip">
+    <strong>Micro-Optimization Spotted in Service Impl:</strong> Notice in <code>TransactionServiceImpl.getTransactionHistory</code>, calling <code>accountRepository.existsById(accountId)</code> instead of <code>accountRepository.findById(accountId)</code> issues a lightweight <code>SELECT count/1</code> instead of hydrating the full <code>Account</code> + joining <code>Customer</code>!
+  </div>
+
+  <div class="file-header">
+    <span>CustomerController, AuditController, LedgerController, LoanController, BeneficiaryController, EmiController</span>
+    <span>MODIFIED</span>
+  </div>
+  <pre class="code"><span class="c">// CustomerController.java</span>
+<span class="a">@GetMapping</span>
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;CustomerSummaryResponse&gt;&gt; getAllCustomers(
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(customerService.getAllCustomers(pageable));
+}
+
+<span class="c">// AuditController.java</span>
+<span class="a">@GetMapping</span>
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;AuditLogResponse&gt;&gt; getAllAuditLogs(
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(auditService.getAllAuditLogs(pageable));
+}
+
+<span class="c">// LedgerController.java</span>
+<span class="a">@GetMapping</span>(<span class="s">"/account/{accountId}"</span>)
+<span class="k">public</span> ResponseEntity&lt;PagedResponse&lt;LedgerEntryResponse&gt;&gt; getLedgerByAccount(
+        <span class="a">@PathVariable</span> <span class="a">@Positive</span> Long accountId,
+        <span class="a">@PageableDefault</span>(size = 20, sort = <span class="s">"createdAt"</span>, direction = Sort.Direction.DESC) Pageable pageable) {
+    <span class="k">return</span> ResponseEntity.ok(ledgerService.getLedgerByAccount(accountId, pageable));
+}</pre>
+
+  <h2>6. Verification &amp; Performance Notes</h2>
+  <ul>
+    <li><strong>Verify Pagination Metadata</strong>: <code>curl -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/v1/transactions/account/1/history?page=0&amp;size=5"</code> — verify response contains <code>content</code> (5 items), <code>totalElements</code>, <code>totalPages</code>, <code>first: true</code>, <code>last</code>.</li>
+    <li><strong>Verify DoS Clamp</strong>: Request <code>?size=5000</code> and verify returned <code>size</code> is clamped strictly to <code>100</code>!</li>
+    <li><strong>Interview Deep Dive — Offset vs Keyset/Cursor Pagination</strong>: Standard <code>OFFSET 100000</code> still requires MySQL to scan and discard 100,000 index entries. At multi-million row scale (e.g., bank reconciliation), replace deep offsets with <em>Keyset/Cursor pagination</em> (<code>WHERE created_at &lt; :cursor ORDER BY created_at DESC LIMIT 20</code>), which achieves constant <code>O(log N)</code> latency on any page depth using Day 70's composite index!</li>
+  </ul>
+
+</body>
+</html>

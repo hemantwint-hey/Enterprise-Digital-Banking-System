@@ -70,5 +70,12 @@
     - Created `DatabaseOptimizationMigrationTest` verifying migration DDL integrity (66 total project tests passing).
 
 ### What We Need to Do Next:
-- **Day 71: Transaction Management & Isolation Levels (ACID & Concurrency Control)**:
-  - Deep dive into Spring `@Transactional`, isolation levels (`READ_COMMITTED`, `REPEATABLE_READ`, `SERIALIZABLE`), propagation behaviors (`REQUIRED`, `REQUIRES_NEW`), and dirty read / phantom read prevention on monetary transactions.
+- **Paused / Deferred Until After Day 79 — Days 71–75 (Automated Testing)**:
+  - Mockito service tests, `@DataJpaTest` repository tests, `@WebMvcTest` controller tests, and `@SpringBootTest` integration suite (`docs/roadmap-refs/05-testing.pdf`) — deferred per user request to complete Days 76–79 first.
+- **Immediate Focus — Days 76–79 (API Hardening & Query Layer, Notes & Planned Code PDFs Prepared)**:
+  - **Day 76**: Bean Validation (`@Valid` / `@Validated`, nested `@Pattern` / `@Positive` / `@DecimalMin` constraints, enhanced `GlobalExceptionHandler` with `HandlerMethodValidationException` & `ConstraintViolationException`).
+  - **Day 77**: Pagination (`PagedResponse<T>`, `@PageableDefault` & `spring.data.web` configuration, Pageable migration across controllers/services/repositories).
+  - **Day 78**: Sorting (`SortValidator` strict allowlist against `PropertyReferenceException` / column enumeration, multi-column tie-breakers, removal of hardcoded `OrderBy...` method suffixes).
+  - **Day 79**: Dynamic Search (`JpaSpecificationExecutor` + `Specification.unrestricted()` Specifications for Transactions, Accounts, Customers, and Audit Logs).
+- **Architectural Initiative: Privacy-Preserving AI Gateway & Spring AI Service**:
+  - Separate Spring Boot microservice + UML/architecture blueprint (ARP-inspired identity indirection `C123 -> R789`, PII stripping, Kafka integration, AI Smart-Saving Guard).

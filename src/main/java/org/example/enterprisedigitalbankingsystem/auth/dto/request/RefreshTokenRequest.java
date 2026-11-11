@@ -10,6 +10,8 @@ import lombok.*;
 @Setter
 @Builder
 public class RefreshTokenRequest {
-    @NotBlank
+
+    @NotBlank(message = "Refresh token is required")
+    @Size(max = 512, message = "Refresh token cannot exceed 512 characters")
     private String refreshToken;
 }

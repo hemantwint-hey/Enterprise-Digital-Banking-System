@@ -1,14 +1,16 @@
 package org.example.enterprisedigitalbankingsystem.customer.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.example.enterprisedigitalbankingsystem.common.validation.MinimumAge;
 
 import java.time.LocalDate;
 
@@ -19,20 +21,22 @@ import java.time.LocalDate;
 public class CreateCustomerRequest {
 
     @NotBlank(message = "First name is required")
-    @Size(min = 3, max = 50 , message = "First Name must be between  3 to 50 characters")
+    @Size(min = 2, max = 50, message = "First name must be between 2 and 50 characters")
     private String firstName;
 
     @NotBlank(message = "Last name is required")
-    @Size(min = 3, max = 50 , message = "Last Name must be between  3 to 50 characters")
+    @Size(min = 2, max = 50, message = "Last name must be between 2 and 50 characters")
     private String lastName;
 
-    @NotNull(message = "Date of Birth is Required")
+    @NotNull(message = "Date of birth is required")
+    @Past(message = "Date of birth must be in the past")
+    @MinimumAge(value = 18, message = "Customer must be at least 18 years old for banking KYC")
     private LocalDate dateOfBirth;
 
-    @NotBlank(message = "Phone Number is required")
+    @NotBlank(message = "Phone number is required")
     @Pattern(
             regexp = "^[6-9]\\d{9}$",
-            message = "Phone number must be of 10 digit"
+            message = "Phone number must be a valid 10-digit Indian mobile number"
     )
     private String phoneNumber;
 
@@ -41,25 +45,26 @@ public class CreateCustomerRequest {
     private String address;
 
     @NotBlank(message = "City is required")
-    @Size(max = 100, message = "City must not exceed 100 character")
+    @Size(max = 100, message = "City cannot exceed 100 characters")
     private String city;
 
     @NotBlank(message = "State is required")
-    @Size(max = 100, message = "State must not exceed 100 character")
+    @Size(max = 100, message = "State cannot exceed 100 characters")
     private String state;
 
     @NotBlank(message = "Country is required")
-    @Size(max = 100, message = "Country must not exceed 100 character")
+    @Size(max = 100, message = "Country cannot exceed 100 characters")
     private String country;
 
-    @NotBlank(message = "PostalCode is required")
+    @NotBlank(message = "Postal code is required")
     @Pattern(
             regexp = "^\\d{6}$",
-            message = "Postal Code must be valid 6 - digit PIN CODE"
+            message = "Postal code must be a valid 6-digit PIN code"
     )
     private String postalCode;
 
     @Email(message = "Invalid email format")
     @NotBlank(message = "Email is required")
+    @Size(max = 100, message = "Email cannot exceed 100 characters")
     private String email;
 }

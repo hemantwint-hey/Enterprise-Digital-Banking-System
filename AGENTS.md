@@ -88,23 +88,39 @@ This document is automatically loaded by the AI assistant across all sessions to
 
 ---
 
-## 3. Next Up on the Roadmap
-
-### 🎯 Immediate Next Step:
-* **Day 70: Database Optimization: Indexes & Constraints**
+* **Day 70: Database Optimization: Indexes & Constraints & High-Load Benchmarking**
   * **Flyway Migration V2 (`V2__add_indexes_and_constraints.sql`)**: Authored versioned migration script creating 9 high-performance B-Tree & composite indexes and 7 financial CHECK constraints.
   * **Composite B-Tree Indexes**: `idx_accounts_customer_id`, `idx_tx_source_created` `(source_account_id, created_at DESC)`, `idx_tx_dest_created` `(destination_account_id, created_at DESC)`, `idx_ledger_account_created`, `idx_beneficiaries_customer`, `idx_loans_customer`, `idx_emis_loan_status`, `idx_audit_entity_search`, and `idx_processed_events_type_time`.
   * **Strict Financial CHECK Constraints**: Added disk-level integrity checks (`chk_account_balance_non_negative`, `chk_transaction_amount_positive`, `chk_ledger_amount_positive`, `chk_loan_principal_positive`, `chk_loan_interest_non_negative`, `chk_loan_tenure_positive`, `chk_emi_amount_positive`).
   * **JPA Entity Synchronization**: Synchronized `@Table(indexes = { ... })` across `Account`, `Transaction`, `LedgerEntry`, `Beneficiary`, `Loan`, `Emi`, `AuditLog`, and `ProcessedEvent`.
   * **Unit Test Suite**: Added `DatabaseOptimizationMigrationTest` verifying V1 and V2 migration DDL integrity (66 total project tests passing).
+  * **High-Throughput Load Testing & Telemetry**:
+    * Enhanced `load-test.ps1` with C# high-concurrency engine, real-time progress reporting, and p50/p95/p99 latency distribution tracking.
+    * Executed 50,000 requests across 400 concurrent slots: achieved **4,732.38 RPS** (instant peak: **5,202 RPS**) with **100% 200 OK success rate** and 0 errors.
+    * Validated full-stack observability in Grafana and Task Manager: CPU saturated at ~95% across all 12 logical processors, JVM platform threads held flat at ~70 via Project Loom Virtual Threads, and heap usage remained stable at ~11.9% (224 MiB).
 
 ---
 
 ## 3. Next Up on the Roadmap
 
-### 🎯 Immediate Next Step:
-* **Day 71: Transaction Management & Isolation Levels (ACID & Concurrency Control)**
-  * Deep dive into Spring `@Transactional`, isolation levels (`READ_COMMITTED`, `REPEATABLE_READ`, `SERIALIZABLE`), propagation behaviors (`REQUIRED`, `REQUIRES_NEW`), and dirty read / phantom read prevention on monetary transactions.
+### ⏸️ Deferred Until After Day 79:
+* **Days 71–75: Automated Testing Suite** (`docs/roadmap-refs/05-testing.pdf`)
+  * Mockito Unit Tests, `@DataJpaTest` Persistence Tests, `@WebMvcTest` Controller Tests, and `@SpringBootTest` End-to-End Integration Tests — paused per user request and scheduled right after Day 79.
+
+### 🎯 Immediate Next Steps (Days 76–79 Notes & Planned Code PDFs Ready):
+* **Day 76: Validation (Bean Validation)** (`docs/2026-11-11-Day76-Bean-Validation.pdf`)
+  * Complete JSR-380 validation (`@Valid`, `@Validated`, `@DecimalMin`, `@Pattern`, `@Positive`), JSON parse & path/param validation error normalization (`HandlerMethodValidationException`, `ConstraintViolationException`, `HttpMessageNotReadableException`).
+* **Day 77: Pagination (`Pageable` APIs)** (`docs/2026-11-11-Day77-Pagination-Pageable-APIs.pdf`)
+  * `PagedResponse<T>` envelope, `@PageableDefault`, Redis cache key inclusion (`page`/`size`/`sort`), and paginated repository/service/controller rollout.
+* **Day 78: Sorting Support** (`docs/2026-11-11-Day78-Sorting-Support.pdf`)
+  * `SortValidator` field allowlisting, `PropertyReferenceException` handling, deterministic tie-breakers (`id`/`createdAt`), and cleanup of hardcoded `OrderBy...` repository queries.
+* **Day 79: Search (Dynamic Search APIs)** (`docs/2026-11-11-Day79-Dynamic-Search-APIs.pdf`)
+  * Type-safe Spring Data JPA `Specification` builders (`Specification.unrestricted()`, `JpaSpecificationExecutor`) for `Transaction`, `Account`, `Customer`, and `AuditLog` with combined Pagination + Sorting.
+
+* **Architectural Initiative: Privacy-Preserving AI Gateway & Spring AI Service**
+  * **Decoupled Architecture**: Design and implement the AI layer as an independent microservice communicating asynchronously via Apache Kafka.
+  * **ARP-Inspired Identity Abstraction**: Intercept transaction events, strip customer PII (Customer C123 -> Ephemeral Token R789), sanitize/minimize category data, and forward to Spring AI.
+  * **AI Smart-Saving Guard**: Use Spring AI to analyze spend categories, identify wasteful recurring subscriptions, and deliver actionable savings insights back to the customer dashboard without leaking identities.
 
 ---
 
